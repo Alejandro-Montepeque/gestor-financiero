@@ -1,0 +1,27 @@
+@model gestor_financiero.Models.Presupuesto
+@{ ViewBag.Title = "Editar presupuesto"; }
+
+<div class="max-w-xl mx-auto bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    @using (Html.BeginForm())
+    {
+        @Html.AntiForgeryToken()
+        @Html.HiddenFor(m => m.IdPresupuesto)
+        @Html.ValidationSummary(true, "", new { @class = "text-rose-600 text-sm block mb-2" })
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Año</label>
+                    @Html.TextBoxFor(m => m.Anio, new { @class = "w-full px-3 py-2 border border-slate-300 rounded-lg", type = "number" })
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Mes</label>
+                    @Html.TextBoxFor(m => m.Mes, new { @class = "w-full px-3 py-2 border border-slate-300 rounded-lg", type = "number", min = 1, max = 12 })
+                </div>
+            </div>
+        </div>
+        <div class="flex gap-2 pt-4">
+            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Actualizar</button>
+            <a href="@Url.Action("Index")" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium">Cancelar</a>
+        </div>
+    }
+</div>

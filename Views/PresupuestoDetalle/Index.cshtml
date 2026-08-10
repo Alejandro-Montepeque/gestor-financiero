@@ -1,0 +1,60 @@
+@model IEnumerable<gestor_financiero.Models.PresupuestoDetalle>
+@using System.Globalization
+@{
+    ViewBag.Title = "Detalles de presupuesto";
+    Func<decimal, string> money = v => v.ToString("C2", new CultureInfo("es-SV"));
+    var idPresupuesto = ViewBag.IdPresupuesto as int?;
+}
+
+<div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+    <div>
+        @if (idPresupuesto.HasValue)
+        {
+            <a href="@Url.Action("Details", "Presupuesto", new { id = idPresupuesto })" class="text-sm text-indigo-600 hover:text-indigo-700">← Volver al detalle del presupuesto</a>
+        }
+    </div>
+    <a href="@Url.Action("Create", new { idPresupuesto = idPresupuesto })" class="inline-flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">
+        <i class="icon-plus"></i> Agregar detalle
+    </a>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-x-auto">
+    <table class="w-full min-w-[700px] text-sm">
+        <thead class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+            <tr>
+                <th class="text-left px-6 py-3 font-medium">Presupuesto</th>
+                <th class="text-left px-6 py-3 font-medium">Categoría</th>
+                <th class="text-right px-6 py-3 font-medium">Estimado</th>
+                <th class="text-right px-6 py-3 font-medium">Real</th>
+                <th class="text-right px-6 py-3 font-medium">Diferencia</th>
+                <th class="text-right px-6 py-3 font-medium">Acciones</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            @if (!Model.Any())
+            {
+                <tr><td colspan="6" class="px-6 py-12 text-center text-slate-400">No hay detalles para mostrar</td></tr>
+            }
+            @foreach (var d in Model)
+            {
+                var nombreCat = d.Categoria != null ? d.Categoria.Nombre : "";
+                var labelPres = d.Presupuesto != null
+                    ? CultureInfo.GetCultureInfo("es").DateTimeFormat.GetMonthName(d.Presupuesto.Mes) + " " + d.Presupuesto.Anio
+                    : "";
+                var diferencia = d.Estimado - d.Real;
+                var sobrepasado = d.Real > d.Estimado;
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-3 capitalize">@labelPres</td>
+                    <td class="px-6 py-3">@nombreCat</td>
+                    <td class="px-6 py-3 text-right">@money(d.Estimado)</td>
+                    <td class="px-6 py-3 text-right">@money(d.Real)</td>
+                    <td class="px-6 py-3 text-right font-medium @(sobrepasado ? "text-rose-600" : "text-emerald-600")">@money(diferencia)</td>
+                    <td class="px-6 py-3 text-right">
+                        <a href="@Url.Action("Edit", new { id = d.IdDetalle })" class="text-indigo-600 hover:text-indigo-700"><i class="icon-pencil"></i></a>
+                        <a href="@Url.Action("Delete", new { id = d.IdDetalle })" class="text-rose-600 hover:text-rose-700 ml-3"><i class="icon-trash-2"></i></a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

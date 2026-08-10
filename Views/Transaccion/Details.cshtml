@@ -1,0 +1,16 @@
+@model gestor_financiero.Models.Transaccion
+@using System.Globalization
+@{ ViewBag.Title = "Detalle de transacción"; }
+
+<div class="max-w-xl mx-auto bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <dl class="grid grid-cols-2 gap-3 text-sm mb-6">
+        <dt class="text-slate-500">Fecha</dt><dd class="font-medium">@Model.Fecha.ToString("dd MMM yyyy", new CultureInfo("es"))</dd>
+        <dt class="text-slate-500">Categoría</dt><dd class="font-medium">@(Model.Categoria != null ? Model.Categoria.Nombre : "") (@(Model.Categoria != null ? Model.Categoria.Tipo : ""))</dd>
+        <dt class="text-slate-500">Monto</dt><dd class="font-medium">@Model.Monto.ToString("C2", new CultureInfo("es-SV"))</dd>
+        <dt class="text-slate-500">Notas</dt><dd>@Model.Notas</dd>
+    </dl>
+    <div class="flex gap-2">
+        <a href="@Url.Action("Edit", new { id = Model.IdTransaccion })" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Editar</a>
+        <a href="@Url.Action("Index")" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium">Volver</a>
+    </div>
+</div>

@@ -1,0 +1,121 @@
+@model gestor_financiero.Models.Presupuesto
+@using System.Globalization
+@{
+    ViewBag.Title = "Detalle del presupuesto";
+    Func<decimal, string> money = v => v.ToString("C2", new CultureInfo("es-SV"));
+    var nombreMes = CultureInfo.GetCultureInfo("es").DateTimeFormat.GetMonthName(Model.Mes);
+    var totalEstimado = Model.Detalles?.Sum(d => d.Estimado) ?? 0;
+    var totalReal = Model.Detalles?.Sum(d => d.Real) ?? 0;
+    var pctTotal = totalEstimado > 0 ? Math.Min(100, (double)(totalReal / totalEstimado) * 100) : 0;
+}
+
+<div class="no-print flex justify-end gap-2 mb-4">
+    <button type="button" id="btnPdf" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1">
+        <i class="icon-download"></i> Descargar PDF
+    </button>
+</div>
+
+<div id="reporte-pdf">
+
+<div class="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white rounded-xl p-6 mb-6 shadow-lg">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+        <div>
+            <div class="text-indigo-200 text-sm">Presupuesto de</div>
+            <h2 class="text-3xl font-bold capitalize">@nombreMes @Model.Anio</h2>
+        </div>
+        <div class="text-right">
+            <div class="text-indigo-200 text-xs uppercase tracking-wide">Total ejecutado</div>
+            <div class="text-3xl font-bold">@money(totalReal) <span class="text-base text-indigo-200 font-normal">/ @money(totalEstimado)</span></div>
+            <div class="w-full md:w-64 bg-indigo-900/40 rounded-full h-2 mt-2 overflow-hidden">
+                <div class="bg-white h-full rounded-full" style="width:@(pctTotal.ToString("0.##", CultureInfo.InvariantCulture))%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="flex justify-end mb-4">
+    <a href="@Url.Action("Create", "PresupuestoDetalle", new { idPresupuesto = Model.IdPresupuesto })" class="inline-flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">
+        <i class="icon-plus"></i> Agregar categoría
+    </a>
+</div>
+
+<div class="space-y-3">
+    @foreach (var d in Model.Detalles ?? new List<gestor_financiero.Models.PresupuestoDetalle>())
+    {
+        var pct = d.Estimado > 0 ? Math.Min(100, (double)(d.Real / d.Estimado) * 100) : 0;
+        var sobrepasado = d.Real > d.Estimado;
+        // Tailwind no genera clases dinamicas como bg-rose-500 si no las ve en el codigo,
+        // por eso usamos el color como estilo inline para que la barra siempre se pinte.
+        var barColor = sobrepasado ? "#f43f5e" : (pct > 80 ? "#f59e0b" : "#10b981");
+        var pctStr = pct.ToString("0.##", CultureInfo.InvariantCulture);
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+            <div class="flex items-start justify-between mb-2">
+                <div>
+                    <div class="font-semibold text-slate-800">@(d.Categoria != null ? d.Categoria.Nombre : "")</div>
+                    <div class="text-xs text-slate-500">@(d.Categoria != null ? d.Categoria.Tipo : "")</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-lg font-bold text-slate-800">@money(d.Real)</div>
+                    <div class="text-xs text-slate-500">de @money(d.Estimado)</div>
+                </div>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div class="h-full rounded-full transition-all" style="width:@(pctStr)%; background-color:@barColor;"></div>
+            </div>
+            <div class="flex justify-between items-center mt-2 text-xs">
+                <span class="@(sobrepasado ? "text-rose-600 font-medium" : "text-slate-500")">
+                    @if (sobrepasado) { <i class="icon-circle-alert"></i><text> Sobrepasado por @money(d.Real - d.Estimado)</text> }
+                    else { <text>@pct.ToString("0")% utilizado · Queda @money(d.Estimado - d.Real)</text> }
+                </span>
+                <div class="flex gap-2">
+                    <a href="@Url.Action("Edit", "PresupuestoDetalle", new { id = d.IdDetalle })" class="text-indigo-600 hover:text-indigo-700"><i class="icon-pencil text-sm"></i></a>
+                    <a href="@Url.Action("Delete", "PresupuestoDetalle", new { id = d.IdDetalle })" class="text-rose-600 hover:text-rose-700"><i class="icon-trash-2 text-sm"></i></a>
+                </div>
+            </div>
+        </div>
+    }
+    @if (Model.Detalles == null || !Model.Detalles.Any())
+    {
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">
+            Aún no has agregado categorías a este presupuesto
+        </div>
+    }
+</div>
+
+</div> @* fin de #reporte-pdf *@
+
+<div class="no-print mt-6">
+    <a href="@Url.Action("Index")" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium inline-block">← Volver</a>
+</div>
+
+@section Scripts {
+<script src="~/Scripts/html2pdf.min.js"></script>
+<script>
+    document.getElementById('btnPdf').addEventListener('click', function () {
+        var el = document.getElementById('reporte-pdf');
+        var nombre = 'Presupuesto_@(nombreMes)_@(Model.Anio).pdf';
+
+        if (window.Swal) {
+            Swal.fire({
+                title: 'Generando PDF…',
+                allowOutsideClick: false,
+                didOpen: function () { Swal.showLoading(); }
+            });
+        }
+
+        html2pdf().set({
+            margin:      [10, 10, 10, 10],
+            filename:    nombre,
+            image:       { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+            jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
+        }).from(el).save().then(function () {
+            if (window.Swal) Swal.close();
+        }).catch(function (err) {
+            if (window.Swal) { Swal.close(); Swal.fire('Error', 'No se pudo generar el PDF', 'error'); }
+            console.error(err);
+        });
+    });
+</script>
+}

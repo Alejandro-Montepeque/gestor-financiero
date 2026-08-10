@@ -1,0 +1,230 @@
+@model gestor_financiero.ViewModels.DashboardViewModel
+@using System.Globalization
+@{
+    Func<decimal, string> money = v => v.ToString("C2", new CultureInfo("es-SV"));
+    var fechaHoy = DateTime.Now.ToString("dd 'de' MMMM 'de' yyyy", new CultureInfo("es"));
+}
+
+<div class="no-print flex justify-end gap-2 mb-4">
+    <button type="button" id="btnPdf" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1">
+        <i class="icon-download"></i> Descargar PDF
+    </button>
+</div>
+
+<div id="reporte-pdf">
+
+<!-- Encabezado solo visible en el PDF -->
+<div class="hidden print:block pdf-only mb-4 pb-4 border-b border-slate-200">
+    <h1 class="text-2xl font-bold text-slate-800">Dashboard Financiero</h1>
+    <p class="text-sm text-slate-500">Generado el @fechaHoy</p>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="text-sm text-slate-500 mb-1">Ingresos del mes</div>
+                <div class="text-2xl font-bold text-slate-800">@money(Model.TotalIngresos)</div>
+            </div>
+            <div class="w-11 h-11 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                <i class="icon-trending-up text-xl"></i>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="text-sm text-slate-500 mb-1">Gastos del mes</div>
+                <div class="text-2xl font-bold text-slate-800">@money(Model.TotalGastos)</div>
+            </div>
+            <div class="w-11 h-11 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center">
+                <i class="icon-trending-down text-xl"></i>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="text-sm text-slate-500 mb-1">Balance del mes</div>
+                <div class="text-2xl font-bold @(Model.Balance >= 0 ? "text-emerald-600" : "text-rose-600")">@money(Model.Balance)</div>
+            </div>
+            <div class="w-11 h-11 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
+                <i class="icon-wallet text-xl"></i>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="text-sm text-slate-500 mb-1">Deuda total</div>
+                <div class="text-2xl font-bold text-slate-800">@money(Model.TotalDeudas)</div>
+            </div>
+            <div class="w-11 h-11 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
+                <i class="icon-credit-card text-xl"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts row -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <div class="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-slate-100">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="font-semibold text-slate-800">Ingresos vs Gastos</h3>
+                <p class="text-xs text-slate-500">Últimos 6 meses</p>
+            </div>
+        </div>
+        <canvas id="chartFlujo" height="100"></canvas>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
+        <h3 class="font-semibold text-slate-800 mb-1">Gastos por categoría</h3>
+        <p class="text-xs text-slate-500 mb-4">Este mes</p>
+        <canvas id="chartCategorias"></canvas>
+    </div>
+</div>
+
+<!-- Bottom row -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-semibold text-slate-800">Transacciones recientes</h3>
+            <a href="@Url.Action("Index", "Transaccion")" class="text-sm text-indigo-600 hover:text-indigo-700">Ver todas →</a>
+        </div>
+        <div class="divide-y divide-slate-100">
+            @if (!Model.TransaccionesRecientes.Any())
+            {
+                <div class="px-6 py-8 text-center text-sm text-slate-400">Sin transacciones todavía</div>
+            }
+            @foreach (var tx in Model.TransaccionesRecientes)
+            {
+                var isIngreso = tx.Categoria.Tipo == "INGRESO";
+                <div class="px-6 py-3 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center @(isIngreso ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600")">
+                        <i class="@(isIngreso ? "icon-arrow-down-left" : "icon-arrow-up-right")"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-medium text-slate-800 text-sm truncate">@tx.Categoria.Nombre</div>
+                        <div class="text-xs text-slate-500">@tx.Fecha.ToString("dd MMM yyyy", new CultureInfo("es"))</div>
+                    </div>
+                    <div class="font-semibold text-sm @(isIngreso ? "text-emerald-600" : "text-rose-600")">
+                        @(isIngreso ? "+" : "-")@money(tx.Monto)
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-semibold text-slate-800">Deudas activas</h3>
+            <a href="@Url.Action("Index", "Deuda")" class="text-sm text-indigo-600 hover:text-indigo-700">Ver todas →</a>
+        </div>
+        <div class="divide-y divide-slate-100">
+            @if (!Model.DeudasActivas.Any())
+            {
+                <div class="px-6 py-8 text-center text-sm text-slate-400">¡Sin deudas! 🎉</div>
+            }
+            @foreach (var d in Model.DeudasActivas)
+            {
+                <div class="px-6 py-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <div class="font-medium text-slate-800 text-sm">@d.Nombre</div>
+                        <div class="font-semibold text-sm text-slate-700">@money(d.SaldoActual)</div>
+                    </div>
+                    <div class="text-xs text-slate-500">
+                        @if (d.TasaInteres.HasValue) { <span>@d.TasaInteres.Value.ToString("0.00")% interés · </span> }
+                        @if (d.PagoMinimo.HasValue) { <span>Mín: @money(d.PagoMinimo.Value)</span> }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+</div> @* fin de #reporte-pdf *@
+
+@section Scripts {
+<script src="~/Scripts/chart.umd.min.js"></script>
+<script>
+    const meses    = @Html.Raw(System.Web.Helpers.Json.Encode(Model.SerieMensual.Select(s => s.Mes)));
+    const ingresos = @Html.Raw(System.Web.Helpers.Json.Encode(Model.SerieMensual.Select(s => s.Ingresos)));
+    const gastos   = @Html.Raw(System.Web.Helpers.Json.Encode(Model.SerieMensual.Select(s => s.Gastos)));
+    const catNames = @Html.Raw(System.Web.Helpers.Json.Encode(Model.GastosPorCategoria.Select(c => c.Categoria)));
+    const catVals  = @Html.Raw(System.Web.Helpers.Json.Encode(Model.GastosPorCategoria.Select(c => c.Monto)));
+
+    new Chart(document.getElementById('chartFlujo'), {
+        type: 'bar',
+        data: {
+            labels: meses,
+            datasets: [
+                { label: 'Ingresos', data: ingresos, backgroundColor: '#10b981', borderRadius: 6 },
+                { label: 'Gastos',   data: gastos,   backgroundColor: '#f43f5e', borderRadius: 6 }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }
+        }
+    });
+
+    new Chart(document.getElementById('chartCategorias'), {
+        type: 'doughnut',
+        data: {
+            labels: catNames.length ? catNames : ['Sin datos'],
+            datasets: [{
+                data: catVals.length ? catVals : [1],
+                backgroundColor: ['#6366f1','#f43f5e','#f59e0b','#10b981','#06b6d4','#8b5cf6']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            cutout: '60%'
+        }
+    });
+</script>
+
+<script src="~/Scripts/html2pdf.min.js"></script>
+<script>
+    document.getElementById('btnPdf').addEventListener('click', function () {
+        var el = document.getElementById('reporte-pdf');
+        var fecha = new Date().toISOString().slice(0, 10);
+        var nombre = 'Dashboard_' + fecha + '.pdf';
+
+        // Mostramos el encabezado oculto solo durante la captura, asi el PDF
+        // tiene titulo + fecha y la pantalla normal no.
+        var encabezado = el.querySelector('.pdf-only');
+        if (encabezado) encabezado.classList.remove('hidden');
+
+        if (window.Swal) {
+            Swal.fire({
+                title: 'Generando PDF…',
+                allowOutsideClick: false,
+                didOpen: function () { Swal.showLoading(); }
+            });
+        }
+
+        // Damos 200ms a Chart.js para que termine de animar antes de capturar
+        setTimeout(function () {
+            html2pdf().set({
+                margin:      [10, 10, 10, 10],
+                filename:    nombre,
+                image:       { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
+            }).from(el).save().then(function () {
+                if (encabezado) encabezado.classList.add('hidden');
+                if (window.Swal) Swal.close();
+            }).catch(function (err) {
+                if (encabezado) encabezado.classList.add('hidden');
+                if (window.Swal) { Swal.close(); Swal.fire('Error', 'No se pudo generar el PDF', 'error'); }
+                console.error(err);
+            });
+        }, 200);
+    });
+</script>
+}

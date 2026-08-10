@@ -1,0 +1,63 @@
+@model IEnumerable<gestor_financiero.Models.Deuda>
+@using System.Globalization
+@{
+    ViewBag.Title = "Deudas";
+    Func<decimal, string> money = v => v.ToString("C2", new CultureInfo("es-SV"));
+    var total = Model.Sum(d => d.SaldoActual);
+}
+
+<div class="flex justify-between items-center mb-6 flex-wrap gap-3">
+    <div class="bg-gradient-to-r from-rose-500 to-rose-700 text-white rounded-xl px-6 py-4 shadow-lg">
+        <div class="text-rose-100 text-xs uppercase tracking-wide">Deuda total</div>
+        <div class="text-3xl font-bold">@money(total)</div>
+    </div>
+    <a href="@Url.Action("Create")" class="inline-flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">
+        <i class="icon-plus"></i> Nueva deuda
+    </a>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    @foreach (var d in Model)
+    {
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 hover:shadow-md transition-shadow">
+            <div class="flex items-start justify-between mb-3">
+                <div>
+                    <div class="font-semibold text-slate-800 text-lg">@d.Nombre</div>
+                </div>
+                <div class="w-10 h-10 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center">
+                    <i class="icon-credit-card"></i>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3 mb-4">
+                <div>
+                    <div class="text-xs text-slate-500">Saldo</div>
+                    <div class="font-bold text-slate-800">@money(d.SaldoActual)</div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">Tasa</div>
+                    <div class="font-bold text-slate-800">@(d.TasaInteres?.ToString("0.00") ?? "—")%</div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">Pago mín</div>
+                    <div class="font-bold text-slate-800">@(d.PagoMinimo.HasValue ? money(d.PagoMinimo.Value) : "—")</div>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(d.Notas))
+            {
+                <div class="text-xs text-slate-500 italic mb-3">@d.Notas</div>
+            }
+            <div class="flex gap-2 flex-wrap">
+                <a href="@Url.Action("Details", new { id = d.IdDeuda })" class="text-sm px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium">Ver pagos</a>
+                <a href="@Url.Action("Create", "PagoDeuda", new { idDeuda = d.IdDeuda })" class="text-sm px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-medium">+ Pago</a>
+                <a href="@Url.Action("Edit", new { id = d.IdDeuda })" class="text-sm px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg font-medium">Editar</a>
+                <a href="@Url.Action("Delete", new { id = d.IdDeuda })" class="text-sm px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg font-medium">Eliminar</a>
+            </div>
+        </div>
+    }
+    @if (!Model.Any())
+    {
+        <div class="col-span-full bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">
+            🎉 No tienes deudas registradas
+        </div>
+    }
+</div>

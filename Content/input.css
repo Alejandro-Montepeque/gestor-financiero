@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========== Inter font local (los .woff2 los copia build-assets.js) ========== */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/Inter-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/Inter-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/Inter-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/Inter-Bold.woff2') format('woff2');
+}
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  /* Sidebar nav links */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-300 transition-colors;
+  }
+  .sidebar-link:hover {
+    @apply bg-indigo-700 text-white;
+  }
+  .sidebar-link.active {
+    @apply bg-indigo-600 text-white shadow-lg;
+    box-shadow: 0 10px 15px -3px rgba(79, 70, 229, .3);
+  }
+
+  /* Tarjetas con efecto lift al hover */
+  .card-hover {
+    @apply transition-all duration-150;
+  }
+  .card-hover:hover {
+    @apply -translate-y-0.5 shadow-md;
+  }
+}
+
+/* Reglas de impresion (para vistas de reportes) */
+@media print {
+  aside, header, .no-print { display: none !important; }
+  main { padding: 0 !important; }
+  body { background: white !important; }
+  .print-clean { box-shadow: none !important; border: 0 !important; }
+}

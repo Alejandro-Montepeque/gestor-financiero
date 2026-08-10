@@ -1,0 +1,149 @@
+@model IEnumerable<gestor_financiero.Models.ResumenAnual>
+@using System.Globalization
+@{
+    ViewBag.Title = "Resumen Anual";
+    Func<decimal, string> money = v => v.ToString("C2", new CultureInfo("es-SV"));
+}
+
+<div class="no-print flex justify-end gap-2 mb-4">
+    <button type="button" id="btnPdf" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1">
+        <i class="icon-download"></i> Descargar PDF
+    </button>
+    <a href="@Url.Action("Create")" class="inline-flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">
+        <i class="icon-plus"></i> Nuevo resumen
+    </a>
+</div>
+
+<div id="reporte-pdf">
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+        <h3 class="font-semibold text-slate-800 mb-4">Comparativa anual</h3>
+        <canvas id="chartAnual" height="120"></canvas>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+        <h3 class="font-semibold text-slate-800 mb-4">Distribución promedio</h3>
+        <canvas id="chartDistribucion"></canvas>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-x-auto">
+    <table class="w-full min-w-[700px] text-sm">
+        <thead class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+            <tr>
+                <th class="text-left px-6 py-3 font-medium">Año</th>
+                <th class="text-right px-6 py-3 font-medium">Ingresos</th>
+                <th class="text-right px-6 py-3 font-medium">Ahorros</th>
+                <th class="text-right px-6 py-3 font-medium">Gastos fijos</th>
+                <th class="text-right px-6 py-3 font-medium">Gastos var.</th>
+                <th class="text-right px-6 py-3 font-medium">Deudas</th>
+                <th class="text-right px-6 py-3 font-medium">Balance</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            @foreach (var r in Model)
+            {
+                var balance = (r.Ingresos ?? 0) - (r.GastosFijos ?? 0) - (r.GastosVariables ?? 0) - (r.Deudas ?? 0);
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-3 font-semibold">@r.Anio</td>
+                    <td class="px-6 py-3 text-right text-emerald-600">@money(r.Ingresos ?? 0)</td>
+                    <td class="px-6 py-3 text-right text-sky-600">@money(r.Ahorros ?? 0)</td>
+                    <td class="px-6 py-3 text-right">@money(r.GastosFijos ?? 0)</td>
+                    <td class="px-6 py-3 text-right">@money(r.GastosVariables ?? 0)</td>
+                    <td class="px-6 py-3 text-right text-rose-600">@money(r.Deudas ?? 0)</td>
+                    <td class="px-6 py-3 text-right font-bold @(balance >= 0 ? "text-emerald-600" : "text-rose-600")">@money(balance)</td>
+                    <td class="px-6 py-3 text-right">
+                        <a href="@Url.Action("Edit", new { id = r.IdResumen })" class="text-indigo-600"><i class="icon-pencil text-sm"></i></a>
+                        <a href="@Url.Action("Delete", new { id = r.IdResumen })" class="text-rose-600 ml-2"><i class="icon-trash-2 text-sm"></i></a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+</div> @* fin de #reporte-pdf *@
+
+@section Scripts {
+<script src="~/Scripts/chart.umd.min.js"></script>
+<script>
+    const data = @Html.Raw(System.Web.Helpers.Json.Encode(Model.Select(r => new {
+        anio = r.Anio,
+        ingresos = r.Ingresos ?? 0,
+        ahorros = r.Ahorros ?? 0,
+        gastosFijos = r.GastosFijos ?? 0,
+        gastosVariables = r.GastosVariables ?? 0,
+        deudas = r.Deudas ?? 0
+    })));
+
+    if (data.length) {
+        new Chart(document.getElementById('chartAnual'), {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.anio),
+                datasets: [
+                    { label: 'Ingresos', data: data.map(d => d.ingresos), backgroundColor: '#10b981' },
+                    { label: 'Gastos Fijos', data: data.map(d => d.gastosFijos), backgroundColor: '#f59e0b' },
+                    { label: 'Gastos Variables', data: data.map(d => d.gastosVariables), backgroundColor: '#f43f5e' },
+                    { label: 'Deudas', data: data.map(d => d.deudas), backgroundColor: '#8b5cf6' }
+                ]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+        });
+
+        const totals = data.reduce((a,d) => ({
+            ahorros: a.ahorros + d.ahorros,
+            gastosFijos: a.gastosFijos + d.gastosFijos,
+            gastosVariables: a.gastosVariables + d.gastosVariables,
+            deudas: a.deudas + d.deudas
+        }), { ahorros: 0, gastosFijos: 0, gastosVariables: 0, deudas: 0 });
+
+        new Chart(document.getElementById('chartDistribucion'), {
+            type: 'pie',
+            data: {
+                labels: ['Ahorros','Gastos Fijos','Gastos Variables','Deudas'],
+                datasets: [{
+                    data: [totals.ahorros, totals.gastosFijos, totals.gastosVariables, totals.deudas],
+                    backgroundColor: ['#0ea5e9','#f59e0b','#f43f5e','#8b5cf6']
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+</script>
+
+<script src="~/Scripts/html2pdf.min.js"></script>
+<script>
+    document.getElementById('btnPdf').addEventListener('click', function () {
+        var el = document.getElementById('reporte-pdf');
+        var fecha = new Date().toISOString().slice(0, 10);
+        var nombre = 'ResumenAnual_' + fecha + '.pdf';
+
+        if (window.Swal) {
+            Swal.fire({
+                title: 'Generando PDF…',
+                allowOutsideClick: false,
+                didOpen: function () { Swal.showLoading(); }
+            });
+        }
+
+        // Esperar a que Chart.js termine de animar antes de capturar
+        setTimeout(function () {
+            html2pdf().set({
+                margin:      [10, 10, 10, 10],
+                filename:    nombre,
+                image:       { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF:       { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
+            }).from(el).save().then(function () {
+                if (window.Swal) Swal.close();
+            }).catch(function (err) {
+                if (window.Swal) { Swal.close(); Swal.fire('Error', 'No se pudo generar el PDF', 'error'); }
+                console.error(err);
+            });
+        }, 200);
+    });
+</script>
+}

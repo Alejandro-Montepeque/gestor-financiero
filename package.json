@@ -1,0 +1,22 @@
+{
+  "name": "gestor-financiero",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Assets pipeline para Gestor Financiero (MVC 5)",
+  "scripts": {
+    "build:css": "tailwindcss -i ./Content/input.css -o ./Content/css/app.css --minify",
+    "build:assets": "node build-assets.js",
+    "build": "npm run build:assets && npm run build:css",
+    "watch": "tailwindcss -i ./Content/input.css -o ./Content/css/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.1.1",
+    "chart.js": "^4.4.7",
+    "html2pdf.js": "^0.10.2",
+    "lucide-static": "^0.469.0",
+    "sweetalert2": "^11.14.5"
+  }
+}

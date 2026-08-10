@@ -1,0 +1,49 @@
+@model gestor_financiero.Models.Usuario
+@{ ViewBag.Title = "Mi perfil"; }
+
+<div class="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-20 h-20 bg-gradient-to-br from-indigo-400 to-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-3xl">
+            @(Model.Nombre.Substring(0, 1).ToUpper())
+        </div>
+        <div>
+            <div class="text-2xl font-bold text-slate-800">@Model.Nombre</div>
+            <div class="text-sm text-slate-500">@Model.Email</div>
+        </div>
+    </div>
+
+    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm border-t border-slate-100 pt-6">
+        <div>
+            <dt class="text-xs text-slate-500 uppercase tracking-wide">Nombre completo</dt>
+            <dd class="font-medium text-slate-800 mt-1">@Model.Nombre</dd>
+        </div>
+        <div>
+            <dt class="text-xs text-slate-500 uppercase tracking-wide">Correo electrónico</dt>
+            <dd class="font-medium text-slate-800 mt-1">@Model.Email</dd>
+        </div>
+        <div>
+            <dt class="text-xs text-slate-500 uppercase tracking-wide">Miembro desde</dt>
+            <dd class="font-medium text-slate-800 mt-1">@Model.FechaRegistro.ToString("dd 'de' MMMM 'de' yyyy", new System.Globalization.CultureInfo("es"))</dd>
+        </div>
+    </dl>
+
+    <div class="mt-6 flex gap-2 flex-wrap items-center">
+        <a href="@Url.Action("Edit")" class="inline-flex items-center gap-1 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">
+            <i class="icon-pencil"></i> Editar perfil
+        </a>
+        <a href="@Url.Action("ChangePassword", "Account")"
+           style="background-color: #d97706;"
+           onmouseover="this.style.backgroundColor='#b45309'"
+           onmouseout="this.style.backgroundColor='#d97706'"
+           class="inline-flex items-center gap-1 px-5 py-2 text-white rounded-lg font-medium transition-colors">
+            <i class="icon-key"></i> Cambiar contraseña
+        </a>
+        @using (Html.BeginForm("Logout", "Account", FormMethod.Post, new { @class = "inline" }))
+        {
+            @Html.AntiForgeryToken()
+            <button type="submit" class="inline-flex items-center gap-1 px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium">
+                <i class="icon-log-out"></i> Cerrar sesión
+            </button>
+        }
+    </div>
+</div>

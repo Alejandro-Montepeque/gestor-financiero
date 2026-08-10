@@ -1,0 +1,16 @@
+@model gestor_financiero.Models.Deuda
+@{ ViewBag.Title = "Eliminar deuda"; }
+<div class="max-w-md mx-auto bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <div class="flex items-start gap-3 p-4 bg-rose-50 border border-rose-200 rounded-lg mb-4">
+        <i class="icon-triangle-alert text-rose-600 text-xl"></i>
+        <p class="text-sm text-rose-800">¿Eliminar la deuda <strong>@Model.Nombre</strong>? Se eliminarán también todos sus pagos.</p>
+    </div>
+    @using (Html.BeginForm())
+    {
+        @Html.AntiForgeryToken()
+        <div class="flex gap-2">
+            <button type="submit" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-medium">Sí, eliminar</button>
+            <a href="@Url.Action("Index")" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium">Cancelar</a>
+        </div>
+    }
+</div>

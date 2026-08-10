@@ -1,0 +1,14 @@
+@model gestor_financiero.Models.PagoDeuda
+@using System.Globalization
+@{ ViewBag.Title = "Eliminar pago"; }
+<div class="max-w-md mx-auto bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <p class="text-sm text-slate-700 mb-4">¿Eliminar el pago del <strong>@Model.Fecha.ToString("dd MMM yyyy", new CultureInfo("es"))</strong>?</p>
+    @using (Html.BeginForm())
+    {
+        @Html.AntiForgeryToken()
+        <div class="flex gap-2">
+            <button type="submit" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-medium">Sí, eliminar</button>
+            <a href="@Url.Action("Details", "Deuda", new { id = Model.IdDeuda })" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium">Cancelar</a>
+        </div>
+    }
+</div>

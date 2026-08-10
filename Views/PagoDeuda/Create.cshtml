@@ -1,0 +1,222 @@
+@model gestor_financiero.Models.PagoDeuda
+@using System.Globalization
+@{
+    ViewBag.Title = "Registrar pago";
+    var deudas = (List<gestor_financiero.Models.Deuda>)ViewBag.DeudasUsuario;
+    Func<decimal, string> n2inv = v => v.ToString("F2", CultureInfo.InvariantCulture);
+}
+
+<div class="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    @using (Html.BeginForm())
+    {
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true, "", new { @class = "text-rose-600 text-sm block mb-2" })
+        <div class="space-y-4">
+
+            @* === Deuda con data-* para que el JS lea saldo/tasa/min === *@
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Deuda</label>
+                <select id="ddDeuda" name="IdDeuda" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+                    <option value="">Seleccione...</option>
+                    @foreach (var d in deudas)
+                    {
+                        var saldo = n2inv(d.SaldoActual);
+                        var tasa  = n2inv(d.TasaInteres ?? 0);
+                        var pmin  = n2inv(d.PagoMinimo ?? 0);
+                        var sel = (d.IdDeuda == Model.IdDeuda) ? "selected" : "";
+                        <option value="@d.IdDeuda"
+                                data-saldo="@saldo"
+                                data-tasa="@tasa"
+                                data-min="@pmin"
+                                @sel>@d.Nombre</option>
+                    }
+                </select>
+            </div>
+
+            @* === Tarjeta informativa con saldo / tasa / pago minimo de la deuda === *@
+            <div id="deudaInfo" class="hidden grid grid-cols-3 gap-3 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm">
+                <div>
+                    <div class="text-[10px] text-indigo-700 uppercase font-semibold">Saldo actual</div>
+                    <div id="infoSaldo" class="font-bold text-slate-800">—</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-indigo-700 uppercase font-semibold">Tasa anual</div>
+                    <div id="infoTasa" class="font-bold text-slate-800">—</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-indigo-700 uppercase font-semibold">Pago mínimo</div>
+                    <div id="infoMin" class="font-bold text-slate-800">—</div>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
+                @Html.TextBoxFor(m => m.Fecha, "{0:yyyy-MM-dd}", new { @class = "w-full px-3 py-2 border border-slate-300 rounded-lg", type = "date" })
+            </div>
+
+            @* === Input principal: total pagado ahora === *@
+            <div class="p-4 bg-emerald-50 border border-emerald-100 rounded-lg">
+                <label class="block text-sm font-medium text-emerald-800 mb-1">¿Cuánto pagaste este periodo?</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                    <input id="totalPagado" type="number" step="0.01" min="0" value="0.00"
+                           class="w-full pl-7 pr-3 py-2 border border-emerald-300 rounded-lg bg-white text-base font-semibold" />
+                </div>
+                <p class="text-xs text-emerald-700 mt-1">Sumá pago mínimo + cualquier extra. El sistema calcula el resto.</p>
+            </div>
+
+            @* === Breakdown calculado (editable por si quieren overridear) === *@
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Pago mínimo</label>
+                    @Html.TextBoxFor(m => m.PagoMinimo, "{0:F2}", new { @class = "w-full px-3 py-2 border border-slate-300 rounded-lg", type = "number", step = "0.01", id = "fPagoMinimo" })
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Pago extra</label>
+                    @Html.TextBoxFor(m => m.PagoExtra, "{0:F2}", new { @class = "w-full px-3 py-2 border border-slate-300 rounded-lg", type = "number", step = "0.01", id = "fPagoExtra" })
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Interés del periodo</label>
+                    @Html.TextBoxFor(m => m.Interes, "{0:F2}", new {
+                        @class = "w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-not-allowed",
+                        type = "number", step = "0.01", id = "fInteres", @readonly = "readonly", tabindex = "-1"
+                    })
+                    <p class="text-xs text-slate-500 mt-1">Calculado: saldo × tasa ÷ 12</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">A capital</label>
+                    @Html.TextBoxFor(m => m.Capital, "{0:F2}", new {
+                        @class = "w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-not-allowed",
+                        type = "number", step = "0.01", id = "fCapital", @readonly = "readonly", tabindex = "-1"
+                    })
+                    <p class="text-xs text-slate-500 mt-1">Calculado: pago total − interés</p>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Saldo restante</label>
+                @Html.TextBoxFor(m => m.SaldoRestante, "{0:F2}", new {
+                    @class = "w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-not-allowed",
+                    type = "number", step = "0.01", id = "fSaldoRest", @readonly = "readonly", tabindex = "-1"
+                })
+                <p class="text-xs text-slate-500 mt-1">Calculado: saldo actual − capital pagado</p>
+            </div>
+        </div>
+
+        <div class="flex gap-2 pt-4">
+            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Registrar pago</button>
+            <a href="@Url.Action("Index", "Deuda")" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium">Cancelar</a>
+        </div>
+    }
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var ddDeuda    = document.getElementById('ddDeuda');
+    var info       = document.getElementById('deudaInfo');
+    var infoSaldo  = document.getElementById('infoSaldo');
+    var infoTasa   = document.getElementById('infoTasa');
+    var infoMin    = document.getElementById('infoMin');
+
+    var totalInput = document.getElementById('totalPagado');
+    var fMin       = document.getElementById('fPagoMinimo');
+    var fExtra     = document.getElementById('fPagoExtra');
+    var fInt       = document.getElementById('fInteres');
+    var fCap       = document.getElementById('fCapital');
+    var fSaldoRest = document.getElementById('fSaldoRest');
+
+    var money = function (v) { return '$' + (v || 0).toFixed(2); };
+    var setNum = function (input, value) {
+        if (!input) return;
+        input.value = (value || 0).toFixed(2);
+    };
+
+    function datosDeudaSeleccionada() {
+        var opt = ddDeuda.options[ddDeuda.selectedIndex];
+        if (!opt || !opt.value) return null;
+        return {
+            saldo: parseFloat(opt.getAttribute('data-saldo') || '0'),
+            tasa:  parseFloat(opt.getAttribute('data-tasa')  || '0'),
+            min:   parseFloat(opt.getAttribute('data-min')   || '0')
+        };
+    }
+
+    // Recalcula intereses / capital / saldo restante
+    //   pago_total      = pago_minimo + pago_extra
+    //   interes_periodo = saldo * (tasa/100) / 12   (tasa anual, pagos mensuales)
+    //   capital         = pago_total - interes  (min 0)
+    //   saldo_restante  = saldo - capital
+    function recalcularBreakdown() {
+        var d = datosDeudaSeleccionada();
+        if (!d) return;
+
+        var pmin   = parseFloat(fMin.value)   || 0;
+        var pextra = parseFloat(fExtra.value) || 0;
+        var total  = pmin + pextra;
+
+        var interes = d.saldo * (d.tasa / 100) / 12;
+        if (interes < 0) interes = 0;
+        if (interes > total) interes = total;
+
+        var capital = total - interes;
+        if (capital < 0) capital = 0;
+
+        var saldoRest = d.saldo - capital;
+        if (saldoRest < 0) saldoRest = 0;
+
+        setNum(fInt,       interes);
+        setNum(fCap,       capital);
+        setNum(fSaldoRest, saldoRest);
+    }
+
+    // Reparte el monto total ingresado entre pago minimo y extra
+    function repartirTotal() {
+        var d = datosDeudaSeleccionada();
+        if (!d) return;
+
+        var total = parseFloat(totalInput.value) || 0;
+        var pmin, pextra;
+        if (total >= d.min) {
+            pmin   = d.min;
+            pextra = total - d.min;
+        } else {
+            pmin   = total;
+            pextra = 0;
+        }
+        setNum(fMin,   pmin);
+        setNum(fExtra, pextra);
+        recalcularBreakdown();
+    }
+
+    function onDeudaChange() {
+        var d = datosDeudaSeleccionada();
+        if (!d) {
+            info.classList.add('hidden');
+            return;
+        }
+        info.classList.remove('hidden');
+        infoSaldo.textContent = money(d.saldo);
+        infoTasa.textContent  = d.tasa.toFixed(2) + '%';
+        infoMin.textContent   = money(d.min);
+
+        setNum(fMin,   d.min);
+        setNum(fExtra, 0);
+        if (!parseFloat(totalInput.value)) {
+            setNum(totalInput, d.min);
+        }
+        recalcularBreakdown();
+    }
+
+    ddDeuda.addEventListener('change', onDeudaChange);
+    totalInput.addEventListener('input', repartirTotal);
+    fMin.addEventListener('input', recalcularBreakdown);
+    fExtra.addEventListener('input', recalcularBreakdown);
+
+    if (ddDeuda.value) onDeudaChange();
+})();
+</script>
+}

@@ -1,0 +1,15 @@
+@model gestor_financiero.Models.Deuda
+@{ ViewBag.Title = "Editar deuda"; }
+<div class="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    @using (Html.BeginForm())
+    {
+        @Html.AntiForgeryToken()
+        @Html.HiddenFor(m => m.IdDeuda)
+        @Html.ValidationSummary(true, "", new { @class = "text-rose-600 text-sm block mb-2" })
+        @Html.Partial("_FormDeuda", Model)
+        <div class="flex gap-2 pt-4">
+            <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Actualizar</button>
+            <a href="@Url.Action("Index")" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium">Cancelar</a>
+        </div>
+    }
+</div>

@@ -1,0 +1,20 @@
+@model gestor_financiero.Models.Usuario
+@{ ViewBag.Title = "Mi perfil"; }
+<div class="max-w-xl mx-auto bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-16 h-16 bg-gradient-to-br from-indigo-400 to-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-2xl">
+            @(Model.Nombre.Substring(0, 1).ToUpper())
+        </div>
+        <div>
+            <div class="text-xl font-bold text-slate-800">@Model.Nombre</div>
+            <div class="text-sm text-slate-500">@Model.Email</div>
+        </div>
+    </div>
+    <dl class="grid grid-cols-2 gap-3 text-sm">
+        <dt class="text-slate-500">Registrado el</dt><dd class="font-medium">@Model.FechaRegistro.ToString("dd MMM yyyy")</dd>
+    </dl>
+    <div class="mt-6 flex gap-2">
+        <a href="@Url.Action("Edit")" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Editar</a>
+        <a href="@Url.Action("Index")" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium">Volver</a>
+    </div>
+</div>
