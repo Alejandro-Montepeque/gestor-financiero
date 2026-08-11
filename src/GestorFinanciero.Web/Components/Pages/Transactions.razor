@@ -8,8 +8,8 @@
 @using GestorFinanciero.Application.Interfaces
 @using GestorFinanciero.Domain.Enums
 
-@inject ITransactionService Transactions
-@inject ICategoryService Categories
+@inject ITransactionService TransactionService
+@inject ICategoryService CategoryService
 
 <PageTitle>Transacciones</PageTitle>
 
@@ -161,14 +161,14 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        categoryList = (await Categories.GetAllAsync()).ToList();
+        categoryList = (await CategoryService.GetAllAsync()).ToList();
         await Reload();
     }
 
     private async Task Reload()
     {
         loading = true;
-        transactions = (await Transactions.ListAsync(filter)).ToList();
+        transactions = (await TransactionService.ListAsync(filter)).ToList();
         loading = false;
     }
 
@@ -221,9 +221,9 @@ else
             };
 
             if (dto.Id is null)
-                await Transactions.CreateAsync(dto);
+                await TransactionService.CreateAsync(dto);
             else
-                await Transactions.UpdateAsync(dto);
+                await TransactionService.UpdateAsync(dto);
 
             editing = null;
             await Reload();
@@ -242,7 +242,7 @@ else
     {
         try
         {
-            await Transactions.DeleteAsync(id);
+            await TransactionService.DeleteAsync(id);
             await Reload();
         }
         catch (Exception ex)

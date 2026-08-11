@@ -1,11 +1,15 @@
 @page "/Account/Login"
 
 @using System.ComponentModel.DataAnnotations
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
 @using GestorFinanciero.Infrastructure.Identity
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 
 @inject SignInManager<AppUser> SignInManager
+@inject UserManager<AppUser> UserManager
+@inject IAppEventLogger AppEvents
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
@@ -52,49 +56,97 @@
 </div>
 
 @code {
+    // Single generic message shown for ANY authentication failure. The real
+    // reason (user_not_found, wrong_password, locked_out, ...) is recorded in
+    // the app_events table via IAppEventLogger and never leaked to the UI.
+    private const string GenericErrorMessage = "Error: Correo o contraseña incorrectos.";
+
     private string? errorMessage;
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get; set; } = default!;
 
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        Input ??= new();
+
         if (HttpMethods.IsGet(HttpContext.Request.Method))
         {
-            // Clear the existing external cookie to ensure a clean login process
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
         }
     }
 
     public async Task LoginUser()
     {
-        // lockoutOnFailure: true → automatic account lockout after too many bad attempts.
+        var email = Input.Email.Trim();
+
+        // Look up first so we can log a specific failure reason without leaking
+        // it in the UI (see GenericErrorMessage).
+        var user = await UserManager.FindByEmailAsync(email);
+
+        if (user is null)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthLogin,
+                action: EventActions.Failed,
+                message: "Login attempt for non-existent account.",
+                level: EventLevels.Warning,
+                failureReason: "user_not_found",
+                userEmail: email);
+
+            errorMessage = GenericErrorMessage;
+            return;
+        }
+
         var result = await SignInManager.PasswordSignInAsync(
-            Input.Email,
+            user,
             Input.Password,
             Input.RememberMe,
             lockoutOnFailure: true);
 
         if (result.Succeeded)
         {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthLogin,
+                action: EventActions.Success,
+                message: "Login OK.",
+                level: EventLevels.Info,
+                userId: user.Id,
+                userEmail: email);
+
             Logger.LogInformation("User logged in.");
             RedirectManager.RedirectTo(ReturnUrl);
+            return;
         }
-        else if (result.IsLockedOut)
+
+        var reason = result.IsLockedOut       ? "locked_out"
+                   : result.IsNotAllowed      ? "not_allowed"
+                   : result.RequiresTwoFactor ? "requires_two_factor"
+                   : "wrong_password";
+
+        await AppEvents.LogAsync(
+            module: EventModules.AuthLogin,
+            action: EventActions.Failed,
+            message: $"Login failed ({reason}).",
+            level: EventLevels.Warning,
+            failureReason: reason,
+            userId: user.Id,
+            userEmail: email);
+
+        if (result.IsLockedOut)
         {
             Logger.LogWarning("User account locked out.");
             RedirectManager.RedirectTo("Account/Lockout");
+            return;
         }
-        else
-        {
-            errorMessage = "Error: Correo o contraseña incorrectos.";
-        }
+
+        errorMessage = GenericErrorMessage;
     }
 
     private sealed class InputModel

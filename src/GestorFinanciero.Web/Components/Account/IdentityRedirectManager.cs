@@ -1,14 +1,14 @@
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Components;
 
 namespace GestorFinanciero.Web.Components.Account;
 
 /// <summary>
-/// Server-side helpers for redirecting from Identity form handlers. Blazor
-/// static SSR forms complete the redirect by throwing
-/// <see cref="NavigationException"/>; this class centralises the "encode +
-/// throw" ceremony and adds a lightweight, cookie-backed status-message
-/// channel so the destination page can render a flash message.
+/// Server-side helpers for redirecting from Identity form handlers. Works in
+/// both static SSR (where <see cref="NavigationManager.NavigateTo(string, bool, bool)"/>
+/// throws <c>NavigationException</c> so the framework can emit a 302) and
+/// interactive Server mode (where the redirect happens via a forced full-page
+/// reload). Also exposes a cookie-backed status-message channel so the target
+/// page can render a flash message.
 /// </summary>
 internal sealed class IdentityRedirectManager
 {
@@ -28,10 +28,9 @@ internal sealed class IdentityRedirectManager
         _navigationManager = navigationManager;
     }
 
-    [DoesNotReturn]
     public void RedirectTo(string? uri)
     {
-        uri ??= "";
+        uri = string.IsNullOrEmpty(uri) ? "/" : uri;
 
         // Prevent open redirects to arbitrary external hosts.
         if (!Uri.IsWellFormedUriString(uri, UriKind.Relative))
@@ -39,12 +38,12 @@ internal sealed class IdentityRedirectManager
             uri = _navigationManager.ToBaseRelativePath(uri);
         }
 
-        _navigationManager.NavigateTo(uri);
-        throw new InvalidOperationException(
-            $"{nameof(IdentityRedirectManager)} can only be used during static rendering.");
+        // forceLoad = true works everywhere: static SSR throws NavigationException
+        // that the framework converts to a 302; interactive Server performs a full
+        // browser navigation and destroys the current circuit.
+        _navigationManager.NavigateTo(uri, forceLoad: true);
     }
 
-    [DoesNotReturn]
     public void RedirectTo(string uri, Dictionary<string, object?> queryParameters)
     {
         var uriWithoutQuery = _navigationManager.ToAbsoluteUri(uri).GetLeftPart(UriPartial.Path);
@@ -52,7 +51,6 @@ internal sealed class IdentityRedirectManager
         RedirectTo(newUri);
     }
 
-    [DoesNotReturn]
     public void RedirectToWithStatus(string uri, string message, HttpContext context)
     {
         context.Response.Cookies.Append(StatusCookieName, message, StatusCookieBuilder.Build(context));
@@ -61,10 +59,8 @@ internal sealed class IdentityRedirectManager
 
     private string CurrentPath => _navigationManager.ToAbsoluteUri(_navigationManager.Uri).GetLeftPart(UriPartial.Path);
 
-    [DoesNotReturn]
     public void RedirectToCurrentPage() => RedirectTo(CurrentPath);
 
-    [DoesNotReturn]
     public void RedirectToCurrentPageWithStatus(string message, HttpContext context)
         => RedirectToWithStatus(CurrentPath, message, context);
 }

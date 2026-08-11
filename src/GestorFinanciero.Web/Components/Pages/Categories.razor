@@ -7,7 +7,7 @@
 @using GestorFinanciero.Application.Interfaces
 @using GestorFinanciero.Domain.Enums
 
-@inject ICategoryService Categories
+@inject ICategoryService CategoryService
 
 <PageTitle>Categorías</PageTitle>
 
@@ -127,7 +127,7 @@ else
     private async Task Reload()
     {
         loading = true;
-        categories = (await Categories.GetAllAsync()).ToList();
+        categories = (await CategoryService.GetAllAsync()).ToList();
         loading = false;
     }
 
@@ -171,9 +171,9 @@ else
             };
 
             if (dto.Id is null)
-                await Categories.CreateAsync(dto);
+                await CategoryService.CreateAsync(dto);
             else
-                await Categories.UpdateAsync(dto);
+                await CategoryService.UpdateAsync(dto);
 
             editing = null;
             await Reload();
@@ -192,7 +192,7 @@ else
     {
         try
         {
-            await Categories.DeleteAsync(id);
+            await CategoryService.DeleteAsync(id);
             await Reload();
         }
         catch (Exception ex)

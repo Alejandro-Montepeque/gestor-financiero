@@ -25,6 +25,8 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
     public DbSet<BudgetItem> BudgetItems => Set<BudgetItem>();
     public DbSet<Debt> Debts => Set<Debt>();
     public DbSet<DebtPayment> DebtPayments => Set<DebtPayment>();
+    public DbSet<SeederExecution> SeederExecutions => Set<SeederExecution>();
+    public DbSet<AppEvent> AppEvents => Set<AppEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

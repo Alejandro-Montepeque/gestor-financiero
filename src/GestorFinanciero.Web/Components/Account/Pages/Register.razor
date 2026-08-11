@@ -1,17 +1,16 @@
 @page "/Account/Register"
 
 @using System.ComponentModel.DataAnnotations
-@using System.Text
-@using System.Text.Encodings.Web
 @using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
 @using GestorFinanciero.Infrastructure.Identity
 @using Microsoft.AspNetCore.Identity
-@using Microsoft.AspNetCore.WebUtilities
 
 @inject UserManager<AppUser> UserManager
 @inject IUserStore<AppUser> UserStore
 @inject SignInManager<AppUser> SignInManager
 @inject ICategorySeeder CategorySeeder
+@inject IAppEventLogger AppEvents
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
@@ -23,7 +22,7 @@
         <h1>Crear cuenta</h1>
         <p class="lead">Empezá a llevar el control de tus finanzas.</p>
 
-        <StatusMessage Message="@Message" />
+        <StatusMessage Message="@errorMessage" />
 
         <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
             <DataAnnotationsValidator />
@@ -63,41 +62,60 @@
 </div>
 
 @code {
-    private IEnumerable<IdentityError>? identityErrors;
+    private const string GenericErrorMessage =
+        "Error: No pudimos crear la cuenta. Revisá los datos e intentá de nuevo.";
+
+    private string? errorMessage;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get; set; } = default!;
 
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
-    private string? Message => identityErrors is null
-        ? null
-        : $"Error: {string.Join(", ", identityErrors.Select(e => e.Description))}";
+    protected override void OnInitialized() => Input ??= new();
 
     public async Task RegisterUser(EditContext editContext)
     {
-        var user = CreateUser();
-        user.FullName = Input.FullName;
+        var email = Input.Email.Trim();
 
-        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
+        var user = CreateUser();
+        user.FullName = Input.FullName.Trim();
+
+        await UserStore.SetUserNameAsync(user, email, CancellationToken.None);
         var emailStore = GetEmailStore();
-        await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
+        await emailStore.SetEmailAsync(user, email, CancellationToken.None);
 
         var result = await UserManager.CreateAsync(user, Input.Password);
 
         if (!result.Succeeded)
         {
-            identityErrors = result.Errors;
+            var reason = string.Join(",", result.Errors.Select(e => e.Code));
+
+            await AppEvents.LogAsync(
+                module: EventModules.AuthRegister,
+                action: EventActions.Failed,
+                message: "Registration failed: " + string.Join("; ", result.Errors.Select(e => e.Description)),
+                level: EventLevels.Warning,
+                failureReason: reason,
+                userEmail: email);
+
+            errorMessage = GenericErrorMessage;
             return;
         }
 
         Logger.LogInformation("User created a new account with password.");
 
-        // Seed default categories the first time a user registers.
+        await AppEvents.LogAsync(
+            module: EventModules.AuthRegister,
+            action: EventActions.Success,
+            message: "New account created.",
+            level: EventLevels.Info,
+            userId: user.Id,
+            userEmail: email);
+
         await CategorySeeder.SeedForUserAsync(user.Id);
 
-        // Sign in immediately (email confirmation disabled for MVP).
         await SignInManager.SignInAsync(user, isPersistent: false);
         RedirectManager.RedirectTo(ReturnUrl);
     }

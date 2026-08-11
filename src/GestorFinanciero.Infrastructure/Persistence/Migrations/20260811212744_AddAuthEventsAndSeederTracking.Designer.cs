@@ -3,6 +3,7 @@ using System;
 using GestorFinanciero.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GestorFinanciero.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260811212744_AddAuthEventsAndSeederTracking")]
+    partial class AddAuthEventsAndSeederTracking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,23 +25,18 @@ namespace GestorFinanciero.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("GestorFinanciero.Domain.Entities.AppEvent", b =>
+            modelBuilder.Entity("GestorFinanciero.Domain.Entities.AuthEvent", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
 
-                    b.Property<string>("ExceptionType")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<string>("Extra")
-                        .HasColumnType("text");
+                    b.Property<int>("EventType")
+                        .HasColumnType("integer");
 
                     b.Property<string>("FailureReason")
                         .HasMaxLength(80)
@@ -48,44 +46,15 @@ namespace GestorFinanciero.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<string>("Level")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Module")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("RequestMethod")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<string>("RequestPath")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("StackTrace")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("StatusCode")
+                    b.Property<int>("Result")
                         .HasColumnType("integer");
 
                     b.Property<string>("UserAgent")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
-
-                    b.Property<string>("UserEmail")
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
@@ -94,15 +63,11 @@ namespace GestorFinanciero.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OccurredAt");
 
-                    b.HasIndex("Level", "OccurredAt");
+                    b.HasIndex("Email", "OccurredAt");
 
-                    b.HasIndex("Module", "OccurredAt");
+                    b.HasIndex("EventType", "Result");
 
-                    b.HasIndex("UserEmail", "OccurredAt");
-
-                    b.HasIndex("UserId", "OccurredAt");
-
-                    b.ToTable("app_events", (string)null);
+                    b.ToTable("auth_events", (string)null);
                 });
 
             modelBuilder.Entity("GestorFinanciero.Domain.Entities.Budget", b =>

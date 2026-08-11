@@ -3,6 +3,7 @@ using GestorFinanciero.Infrastructure.Identity;
 using GestorFinanciero.Infrastructure.Persistence;
 using GestorFinanciero.Infrastructure.Persistence.Interceptors;
 using GestorFinanciero.Infrastructure.Seeding;
+using GestorFinanciero.Infrastructure.Seeding.Seeders;
 using GestorFinanciero.Infrastructure.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -76,6 +77,12 @@ public static class DependencyInjection
         services.AddScoped<ICategorySeeder, CategorySeeder>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<ITransactionService, TransactionService>();
+        services.AddScoped<IAppEventLogger, AppEventLogger>();
+
+        // Seeder framework. Register each ISeeder implementation below; the
+        // runner reads them all at startup and executes the pending ones.
+        services.AddSingleton<SeederRunner>();
+        services.AddScoped<ISeeder, SeedDemoUser>();
 
         return services;
     }
@@ -115,10 +122,9 @@ public static class DependencyInjection
             Username = Uri.UnescapeDataString(userInfo[0]),
             Password = Uri.UnescapeDataString(userInfo[1]),
             // Neon (and any managed Postgres over the internet) requires TLS.
-            // TrustServerCertificate lets us skip full chain validation, which is
-            // acceptable given SNI + the DNS-locked hostname.
+            // Npgsql 10 no longer needs TrustServerCertificate — SslMode.Require
+            // already skips full chain validation.
             SslMode = SslMode.Require,
-            TrustServerCertificate = true,
         };
 
         // Copy over query-string parameters we know how to translate.
