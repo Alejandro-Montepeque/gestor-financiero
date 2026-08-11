@@ -1,23 +1,44 @@
+using GestorFinanciero.Infrastructure;
 using GestorFinanciero.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// ─── Blazor Server (interactive components) ─────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// ─── Infrastructure: EF Core + Postgres + Identity ──────────────────────
+builder.Services.AddInfrastructure(builder.Configuration);
+
+// ─── Auth pipeline: cookies + antiforgery for Blazor Server ─────────────
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = "Identity.Application";
+})
+.AddCookie("Identity.Application", options =>
+{
+    options.LoginPath = "/Account/Login";
+    options.LogoutPath = "/Account/Logout";
+    options.AccessDeniedPath = "/Account/AccessDenied";
+});
+
+builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ─── HTTP pipeline ──────────────────────────────────────────────────────
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
