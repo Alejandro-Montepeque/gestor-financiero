@@ -1,0 +1,113 @@
+@page "/Account/Login"
+
+@using System.ComponentModel.DataAnnotations
+@using GestorFinanciero.Infrastructure.Identity
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Identity
+
+@inject SignInManager<AppUser> SignInManager
+@inject ILogger<Login> Logger
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Iniciar sesión</PageTitle>
+
+<div class="auth-shell">
+    <div class="auth-card">
+        <h1>Iniciar sesión</h1>
+        <p class="lead">Continuá donde lo dejaste.</p>
+
+        <StatusMessage Message="@errorMessage" />
+
+        <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="form-errors" role="alert" />
+
+            <div class="field">
+                <label for="email">Correo electrónico</label>
+                <InputText id="email" @bind-Value="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="tu@correo.com" />
+                <ValidationMessage For="() => Input.Email" class="field-error" />
+            </div>
+
+            <div class="field">
+                <label for="password">Contraseña</label>
+                <InputText type="password" id="password" @bind-Value="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" />
+                <ValidationMessage For="() => Input.Password" class="field-error" />
+            </div>
+
+            <div class="field-inline">
+                <label class="checkbox">
+                    <InputCheckbox @bind-Value="Input.RememberMe" />
+                    <span>Recordarme</span>
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Entrar</button>
+        </EditForm>
+
+        <p class="auth-footer">
+            ¿Sin cuenta? <a href="Account/Register">Registrate acá</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    private string? errorMessage;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            // Clear the existing external cookie to ensure a clean login process
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        }
+    }
+
+    public async Task LoginUser()
+    {
+        // lockoutOnFailure: true → automatic account lockout after too many bad attempts.
+        var result = await SignInManager.PasswordSignInAsync(
+            Input.Email,
+            Input.Password,
+            Input.RememberMe,
+            lockoutOnFailure: true);
+
+        if (result.Succeeded)
+        {
+            Logger.LogInformation("User logged in.");
+            RedirectManager.RedirectTo(ReturnUrl);
+        }
+        else if (result.IsLockedOut)
+        {
+            Logger.LogWarning("User account locked out.");
+            RedirectManager.RedirectTo("Account/Lockout");
+        }
+        else
+        {
+            errorMessage = "Error: Correo o contraseña incorrectos.";
+        }
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "El correo es requerido.")]
+        [EmailAddress(ErrorMessage = "Correo no válido.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "La contraseña es requerida.")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        [Display(Name = "Recordarme")]
+        public bool RememberMe { get; set; }
+    }
+}

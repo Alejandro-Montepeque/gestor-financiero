@@ -1,6 +1,10 @@
+using GestorFinanciero.Application.Interfaces;
 using GestorFinanciero.Infrastructure.Identity;
 using GestorFinanciero.Infrastructure.Persistence;
 using GestorFinanciero.Infrastructure.Persistence.Interceptors;
+using GestorFinanciero.Infrastructure.Seeding;
+using GestorFinanciero.Infrastructure.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -65,6 +69,13 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<AppDbContext>()
             .AddSignInManager()
             .AddDefaultTokenProviders();
+
+        // Application-level services implemented by Infrastructure.
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ICategorySeeder, CategorySeeder>();
+        services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<ITransactionService, TransactionService>();
 
         return services;
     }

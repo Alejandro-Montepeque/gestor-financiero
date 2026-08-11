@@ -1,0 +1,230 @@
+@page "/categories"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using System.ComponentModel.DataAnnotations
+@using GestorFinanciero.Application.DTOs
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Enums
+
+@inject ICategoryService Categories
+
+<PageTitle>Categorías</PageTitle>
+
+<div class="page-header">
+    <h1>Categorías</h1>
+    <button class="btn btn-primary" @onclick="StartCreate">+ Nueva categoría</button>
+</div>
+
+@if (loading)
+{
+    <p>Cargando…</p>
+}
+else if (categories.Count == 0)
+{
+    <p>Aún no tenés categorías. Creá la primera para empezar.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th></th>
+                <th>Nombre</th>
+                <th>Tipo</th>
+                <th></th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var cat in categories)
+            {
+                <tr>
+                    <td>
+                        <span class="cat-swatch" style="@($"background:{cat.Color}")"></span>
+                    </td>
+                    <td>@cat.Name</td>
+                    <td>@TypeLabel(cat.Type)</td>
+                    <td>
+                        @if (cat.IsSystem)
+                        {
+                            <span class="badge bg-secondary">Sistema</span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEdit(cat)">Editar</button>
+                        @if (!cat.IsSystem)
+                        {
+                            <button class="btn btn-sm btn-outline-danger ms-2" @onclick="() => Delete(cat.Id)">Borrar</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (editing is not null)
+{
+    <div class="modal-backdrop-fake" @onclick="CancelEdit"></div>
+    <div class="modal-fake">
+        <h2>@(editing.Id is null ? "Nueva categoría" : "Editar categoría")</h2>
+
+        <EditForm Model="editing" OnValidSubmit="SaveEdit">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="form-errors" />
+
+            <div class="field">
+                <label>Nombre</label>
+                <InputText @bind-Value="editing.Name" class="form-control" />
+                <ValidationMessage For="() => editing.Name" class="field-error" />
+            </div>
+
+            <div class="field">
+                <label>Tipo</label>
+                <InputSelect @bind-Value="editing.Type" class="form-control">
+                    @foreach (var t in Enum.GetValues<CategoryType>())
+                    {
+                        <option value="@t">@TypeLabel(t)</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="field">
+                <label>Color</label>
+                <InputText type="color" @bind-Value="editing.Color" class="form-control form-control-color" />
+            </div>
+
+            <div class="field">
+                <label>Icono (nombre Lucide)</label>
+                <InputText @bind-Value="editing.Icon" class="form-control" placeholder="wallet, home, shopping-bag…" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CancelEdit">Cancelar</button>
+                <button type="submit" class="btn btn-primary" disabled="@saving">
+                    @(saving ? "Guardando…" : "Guardar")
+                </button>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    private List<CategoryDto> categories = new();
+    private bool loading = true;
+    private CategoryFormModel? editing;
+    private bool saving;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        loading = true;
+        categories = (await Categories.GetAllAsync()).ToList();
+        loading = false;
+    }
+
+    private void StartCreate()
+    {
+        errorMessage = null;
+        editing = new CategoryFormModel();
+    }
+
+    private void StartEdit(CategoryDto cat)
+    {
+        errorMessage = null;
+        editing = new CategoryFormModel
+        {
+            Id = cat.Id,
+            Name = cat.Name,
+            Type = cat.Type,
+            Color = cat.Color,
+            Icon = cat.Icon,
+        };
+    }
+
+    private void CancelEdit() => editing = null;
+
+    private async Task SaveEdit()
+    {
+        if (editing is null) return;
+
+        saving = true;
+        errorMessage = null;
+
+        try
+        {
+            var dto = new CategoryUpsertDto
+            {
+                Id = editing.Id,
+                Name = editing.Name,
+                Type = editing.Type,
+                Color = editing.Color,
+                Icon = editing.Icon,
+            };
+
+            if (dto.Id is null)
+                await Categories.CreateAsync(dto);
+            else
+                await Categories.UpdateAsync(dto);
+
+            editing = null;
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task Delete(Guid id)
+    {
+        try
+        {
+            await Categories.DeleteAsync(id);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private static string TypeLabel(CategoryType t) => t switch
+    {
+        CategoryType.Income          => "Ingreso",
+        CategoryType.Savings         => "Ahorro",
+        CategoryType.FixedExpense    => "Gasto fijo",
+        CategoryType.VariableExpense => "Gasto variable",
+        CategoryType.Debt            => "Deuda",
+        _                            => t.ToString(),
+    };
+
+    private sealed class CategoryFormModel
+    {
+        public Guid? Id { get; set; }
+
+        [Required(ErrorMessage = "El nombre es requerido.")]
+        [StringLength(80, MinimumLength = 2, ErrorMessage = "El nombre debe tener entre {2} y {1} caracteres.")]
+        public string Name { get; set; } = "";
+
+        public CategoryType Type { get; set; } = CategoryType.VariableExpense;
+
+        [Required]
+        public string Color { get; set; } = "#7C3AED";
+
+        [Required, StringLength(50)]
+        public string Icon { get; set; } = "circle";
+    }
+}

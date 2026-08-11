@@ -1,29 +1,33 @@
 using GestorFinanciero.Infrastructure;
+using GestorFinanciero.Infrastructure.Identity;
 using GestorFinanciero.Web.Components;
+using GestorFinanciero.Web.Components.Account;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ─── Blazor Server (interactive components) ─────────────────────────────
+// ─── Blazor Server ──────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // ─── Infrastructure: EF Core + Postgres + Identity ──────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// ─── Auth pipeline: cookies + antiforgery for Blazor Server ─────────────
+// ─── Auth: cookies + revalidating state provider for Blazor Server ──────
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<IdentityUserAccessor>();
+builder.Services.AddScoped<IdentityRedirectManager>();
+builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultScheme = "Identity.Application";
+    options.DefaultScheme = IdentityConstants.ApplicationScheme;
+    options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
 })
-.AddCookie("Identity.Application", options =>
-{
-    options.LoginPath = "/Account/Login";
-    options.LogoutPath = "/Account/Logout";
-    options.AccessDeniedPath = "/Account/AccessDenied";
-});
+.AddIdentityCookies();
 
 builder.Services.AddAuthorization();
-builder.Services.AddCascadingAuthenticationState();
 
 var app = builder.Build();
 
@@ -44,5 +48,12 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// ─── Logout endpoint (POST, so no CSRF-by-navigation) ───────────────────
+app.MapPost("/Account/Logout", async (SignInManager<AppUser> signInManager) =>
+{
+    await signInManager.SignOutAsync();
+    return Results.LocalRedirect("/");
+});
 
 app.Run();
