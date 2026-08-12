@@ -1,0 +1,193 @@
+@page "/Account/VerifyCode"
+@layout AuthLayout
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Cryptography
+@using System.Text
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Domain.Entities
+@using GestorFinanciero.Infrastructure.Persistence
+@using Microsoft.EntityFrameworkCore
+
+@inject AppDbContext Db
+@inject IAppEventLogger AppEvents
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Verificar código — Gestor Financiero</PageTitle>
+
+<MudPaper Elevation="4" Class="auth-card pa-8" Square="false">
+    <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.MarkEmailRead"
+                 Color="Color.Primary"
+                 Size="Size.Large" />
+        <div>
+            <MudText Typo="Typo.h5">Verificá tu correo</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Paso 2 de 3 — ingresá el código que te enviamos.
+            </MudText>
+        </div>
+    </MudStack>
+
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Enviamos un código de 6 dígitos a <strong>@(Input?.Email ?? "…")</strong>.
+        Expira en @PendingRegistration.CodeLifetimeMinutes minutos.
+    </MudText>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4" Dense="true">
+            @errorMessage
+        </MudAlert>
+    }
+
+    <EditForm Model="Input" method="post" OnValidSubmit="VerifyAsync" FormName="verify-code">
+        <DataAnnotationsValidator />
+
+        <input type="hidden" name="Input.Email" value="@Input.Email" />
+
+        <MudStack Spacing="4">
+            <MudTextField T="string"
+                          Label="Código de 6 dígitos"
+                          @bind-Value="Input.Code"
+                          For="() => Input.Code"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Pin"
+                          MaxLength="6"
+                          Style="font-family:monospace;letter-spacing:0.3em;font-size:1.25em"
+                          UserAttributes="@(new Dictionary<string, object?> {
+                              ["autocomplete"] = "one-time-code",
+                              ["inputmode"] = "numeric",
+                              ["pattern"] = "[0-9]{6}",
+                              ["name"] = "Input.Code" })" />
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.VerifiedUser"
+                       FullWidth="true">
+                Verificar
+            </MudButton>
+        </MudStack>
+    </EditForm>
+
+    <MudDivider Class="my-6" />
+
+    <MudStack Row Justify="Justify.Center" Spacing="1">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">¿No te llegó?</MudText>
+        <MudLink Href="Account/Register" Underline="Underline.Hover">Pedir otro código</MudLink>
+    </MudStack>
+</MudPaper>
+
+@code {
+    // Same generic message for any failure mode — don't leak whether the
+    // email exists or whether attempts were used up.
+    private const string GenericFailureMessage =
+        "El código no es válido o expiró. Pedí uno nuevo.";
+
+    private string? errorMessage;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "email")]
+    private string? EmailFromQuery { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+
+        // Hydrate email from query on GET; on POST the hidden input preserves it.
+        if (string.IsNullOrEmpty(Input.Email))
+            Input.Email = EmailFromQuery ?? "";
+    }
+
+    public async Task VerifyAsync()
+    {
+        var email = Input.Email.Trim().ToLowerInvariant();
+        var code  = (Input.Code ?? "").Trim();
+
+        var pending = await Db.PendingRegistrations
+            .SingleOrDefaultAsync(pr => pr.Email == email);
+
+        if (pending is null || pending.ExpiresAt < DateTime.UtcNow)
+        {
+            errorMessage = GenericFailureMessage;
+            return;
+        }
+
+        // Bump the attempt counter first — if we short-circuit later on wrong
+        // code, the attempt still counts. Prevents unlimited guessing.
+        pending.AttemptsCount++;
+
+        if (pending.AttemptsCount > PendingRegistration.MaxCodeAttempts)
+        {
+            Db.PendingRegistrations.Remove(pending);
+            await Db.SaveChangesAsync();
+
+            await AppEvents.LogAsync(
+                module: EventModules.AuthRegister,
+                action: EventActions.Failed,
+                message: "Verification blocked — max attempts exceeded.",
+                level: EventLevels.Warning,
+                failureReason: "max_attempts",
+                userEmail: email);
+
+            errorMessage = GenericFailureMessage;
+            return;
+        }
+
+        var hash = HashCode(code);
+        if (!CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(hash),
+                Encoding.UTF8.GetBytes(pending.CodeHash)))
+        {
+            await Db.SaveChangesAsync();  // persist the incremented attempt
+
+            await AppEvents.LogAsync(
+                module: EventModules.AuthRegister,
+                action: EventActions.Failed,
+                message: $"Wrong code (attempt {pending.AttemptsCount}/{PendingRegistration.MaxCodeAttempts}).",
+                level: EventLevels.Warning,
+                failureReason: "wrong_code",
+                userEmail: email);
+
+            errorMessage = GenericFailureMessage;
+            return;
+        }
+
+        // Code OK. Mark verified and mint a one-use token for the SetPassword page.
+        pending.IsVerified        = true;
+        pending.VerificationToken = Guid.NewGuid();
+        await Db.SaveChangesAsync();
+
+        await AppEvents.LogAsync(
+            module: EventModules.AuthRegister,
+            action: EventActions.Success,
+            message: "Verification code confirmed.",
+            userEmail: email);
+
+        RedirectManager.RedirectTo(
+            "Account/SetPassword",
+            new Dictionary<string, object?> { ["token"] = pending.VerificationToken });
+    }
+
+    private static string HashCode(string code)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(code));
+        return Convert.ToHexString(bytes);
+    }
+
+    private sealed class InputModel
+    {
+        [Required, EmailAddress]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "Ingresá el código.")]
+        [RegularExpression(@"^\d{6}$", ErrorMessage = "El código debe tener 6 dígitos.")]
+        public string Code { get; set; } = "";
+    }
+}

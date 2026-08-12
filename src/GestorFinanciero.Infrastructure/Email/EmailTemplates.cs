@@ -35,6 +35,31 @@ public static class EmailTemplates
             </p>
             """);
 
+    public static string RegistrationCode(string fullName, string code, int lifetimeMinutes) => Layout(
+        title: "Tu código de verificación",
+        body: $"""
+            <p style='font-size:16px;line-height:1.6;margin:0 0 16px 0;'>Hola <strong>{Escape(fullName)}</strong>,</p>
+            <p style='font-size:16px;line-height:1.6;margin:0 0 24px 0;'>
+                Casi listo — usá este código para confirmar tu correo y terminar de crear tu cuenta.
+                El código expira en <strong>{lifetimeMinutes} minutos</strong>.
+            </p>
+            <div style='margin:24px 0;text-align:center;'>
+                <div style='display:inline-block;padding:16px 28px;
+                            background:rgba(124,58,237,.12);
+                            border:1px solid rgba(124,58,237,.35);
+                            border-radius:12px;
+                            font-family:"SF Mono","Consolas","Courier New",monospace;
+                            font-size:36px;letter-spacing:0.35em;font-weight:700;
+                            color:#c4b5fd;'>
+                    {Escape(code)}
+                </div>
+            </div>
+            <p style='font-size:14px;color:#6b7280;line-height:1.6;margin:24px 0 0 0;'>
+                Si no fuiste vos, ignorá este mensaje. Nadie puede usar este código
+                sin acceso a tu correo.
+            </p>
+            """);
+
     public static string ConfirmEmail(string fullName, string confirmLink) => Layout(
         title: "Confirmá tu email",
         body: $"""

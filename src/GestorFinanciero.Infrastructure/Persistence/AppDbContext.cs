@@ -27,6 +27,7 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
     public DbSet<DebtPayment> DebtPayments => Set<DebtPayment>();
     public DbSet<SeederExecution> SeederExecutions => Set<SeederExecution>();
     public DbSet<AppEvent> AppEvents => Set<AppEvent>();
+    public DbSet<PendingRegistration> PendingRegistrations => Set<PendingRegistration>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

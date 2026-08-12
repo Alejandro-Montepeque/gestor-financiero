@@ -3,22 +3,22 @@
 @attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
 
 @using System.ComponentModel.DataAnnotations
+@using System.Security.Cryptography
 @using System.Text
 @using GestorFinanciero.Application.Interfaces
 @using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Domain.Entities
 @using GestorFinanciero.Infrastructure.Email
 @using GestorFinanciero.Infrastructure.Identity
+@using GestorFinanciero.Infrastructure.Persistence
 @using Microsoft.AspNetCore.Identity
-@using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.EntityFrameworkCore
 
 @inject UserManager<AppUser> UserManager
-@inject IUserStore<AppUser> UserStore
-@inject SignInManager<AppUser> SignInManager
-@inject ICategorySeeder CategorySeeder
+@inject AppDbContext Db
 @inject IEmailService EmailService
 @inject IAppEventLogger AppEvents
 @inject ILogger<Register> Logger
-@inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
 <PageTitle>Crear cuenta — Gestor Financiero</PageTitle>
@@ -31,7 +31,7 @@
         <div>
             <MudText Typo="Typo.h5">Crear cuenta</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Empezá a llevar el control de tus finanzas.
+                Paso 1 de 3 — decinos tu nombre y correo.
             </MudText>
         </div>
     </MudStack>
@@ -43,7 +43,7 @@
         </MudAlert>
     }
 
-    <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
+    <EditForm Model="Input" method="post" OnValidSubmit="StartRegistrationAsync" FormName="register">
         <DataAnnotationsValidator />
 
         <MudStack Spacing="4">
@@ -62,45 +62,18 @@
                           For="() => Input.Email"
                           Variant="Variant.Outlined"
                           InputType="InputType.Email"
+                          HelperText="Te vamos a enviar un código de 6 dígitos para confirmar."
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Email"
-                          UserAttributes="@(new Dictionary<string, object?> { ["autocomplete"] = "username", ["name"] = "Input.Email" })" />
-
-            <div class="gf-strength-wrap">
-                <MudTextField T="string"
-                              Label="Contraseña"
-                              @bind-Value="Input.Password"
-                              For="() => Input.Password"
-                              Variant="Variant.Outlined"
-                              InputType="InputType.Password"
-                              HelperText="Mínimo 8 caracteres, con al menos un número."
-                              Adornment="Adornment.Start"
-                              AdornmentIcon="@Icons.Material.Filled.Lock"
-                              UserAttributes="@(new Dictionary<string, object?> {
-                                  ["autocomplete"] = "new-password",
-                                  ["name"] = "Input.Password",
-                                  ["data-strength-meter"] = "true" })" />
-                <div class="gf-strength-bar gf-strength-0"></div>
-                <div class="gf-strength-label"></div>
-            </div>
-
-            <MudTextField T="string"
-                          Label="Confirmar contraseña"
-                          @bind-Value="Input.ConfirmPassword"
-                          For="() => Input.ConfirmPassword"
-                          Variant="Variant.Outlined"
-                          InputType="InputType.Password"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Outlined.Lock"
-                          UserAttributes="@(new Dictionary<string, object?> { ["autocomplete"] = "new-password", ["name"] = "Input.ConfirmPassword" })" />
+                          UserAttributes="@(new Dictionary<string, object?> { ["autocomplete"] = "email", ["name"] = "Input.Email" })" />
 
             <MudButton ButtonType="ButtonType.Submit"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
                        Size="Size.Large"
-                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                       StartIcon="@Icons.Material.Filled.Send"
                        FullWidth="true">
-                Crear cuenta
+                Enviar código
             </MudButton>
         </MudStack>
     </EditForm>
@@ -114,97 +87,110 @@
 </MudPaper>
 
 @code {
-    private const string GenericErrorMessage =
-        "No pudimos crear la cuenta. Revisá los datos e intentá de nuevo.";
+    private const string GenericSuccessMessage =
+        "Si el correo es válido, te enviamos un código de 6 dígitos.";
 
     private string? errorMessage;
 
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = default!;
 
-    [SupplyParameterFromQuery]
-    private string? ReturnUrl { get; set; }
-
     protected override void OnInitialized() => Input ??= new();
 
-    public async Task RegisterUser(EditContext editContext)
+    public async Task StartRegistrationAsync()
     {
-        var email = Input.Email.Trim();
+        var email = Input.Email.Trim().ToLowerInvariant();
+        var fullName = Input.FullName.Trim();
 
-        var user = CreateUser();
-        user.FullName = Input.FullName.Trim();
-
-        await UserStore.SetUserNameAsync(user, email, CancellationToken.None);
-        var emailStore = GetEmailStore();
-        await emailStore.SetEmailAsync(user, email, CancellationToken.None);
-
-        var result = await UserManager.CreateAsync(user, Input.Password);
-
-        if (!result.Succeeded)
+        // If email is already a real user, don't leak that — behave identically
+        // to a success case but do NOT send the code. Attacker can't enumerate.
+        var alreadyRegistered = await UserManager.FindByEmailAsync(email) is not null;
+        if (alreadyRegistered)
         {
-            var reason = string.Join(",", result.Errors.Select(e => e.Code));
-
             await AppEvents.LogAsync(
                 module: EventModules.AuthRegister,
                 action: EventActions.Failed,
-                message: "Registration failed: " + string.Join("; ", result.Errors.Select(e => e.Description)),
+                message: "Registration attempt for an existing email.",
                 level: EventLevels.Warning,
-                failureReason: reason,
+                failureReason: "email_already_registered",
                 userEmail: email);
 
-            errorMessage = GenericErrorMessage;
+            RedirectManager.RedirectTo(
+                "Account/VerifyCode",
+                new Dictionary<string, object?> { ["email"] = email });
             return;
         }
 
-        await AppEvents.LogAsync(
-            module: EventModules.AuthRegister,
-            action: EventActions.Success,
-            message: "New account created.",
-            userId: user.Id,
-            userEmail: email);
+        // Generate a random 6-digit code (000000-999999). Use RNG, not Random,
+        // so it's not guessable.
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        var codeHash = HashCode(code);
 
-        await CategorySeeder.SeedForUserAsync(user.Id);
+        // Upsert: if there's already a pending registration for this email,
+        // reset it (new code, new expiry, attempts back to 0). This lets the
+        // user retry cleanly without polluting the table.
+        var pending = await Db.PendingRegistrations
+            .SingleOrDefaultAsync(pr => pr.Email == email);
 
-        // Send email confirmation link. The user can't log in until they click.
-        var confirmToken = await UserManager.GenerateEmailConfirmationTokenAsync(user);
-        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(confirmToken));
-        var confirmUrl = NavigationManager.GetUriWithQueryParameters(
-            NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
-            new Dictionary<string, object?> { ["userId"] = user.Id, ["code"] = encodedToken });
+        if (pending is null)
+        {
+            pending = new PendingRegistration
+            {
+                Email     = email,
+                FullName  = fullName,
+                CodeHash  = codeHash,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(PendingRegistration.CodeLifetimeMinutes),
+            };
+            Db.PendingRegistrations.Add(pending);
+        }
+        else
+        {
+            pending.FullName          = fullName;
+            pending.CodeHash          = codeHash;
+            pending.ExpiresAt         = DateTime.UtcNow.AddMinutes(PendingRegistration.CodeLifetimeMinutes);
+            pending.AttemptsCount     = 0;
+            pending.IsVerified        = false;
+            pending.VerificationToken = null;
+        }
+
+        await Db.SaveChangesAsync();
 
         try
         {
             await EmailService.SendAsync(
                 email,
-                "Confirmá tu email en Gestor Financiero",
-                EmailTemplates.ConfirmEmail(user.FullName, confirmUrl));
+                "Tu código de verificación — Gestor Financiero",
+                EmailTemplates.RegistrationCode(fullName, code, PendingRegistration.CodeLifetimeMinutes));
+
+            await AppEvents.LogAsync(
+                module: EventModules.AuthRegister,
+                action: EventActions.Attempt,
+                message: "Registration code sent.",
+                userEmail: email);
         }
         catch (Exception emailEx)
         {
-            Logger.LogWarning(emailEx, "Failed to send confirmation email to {Email}", email);
-            await AppEvents.LogExceptionAsync(emailEx, "Email.Confirm", level: EventLevels.Warning);
+            Logger.LogWarning(emailEx, "Failed to send registration code to {Email}", email);
+            await AppEvents.LogExceptionAsync(emailEx, EventModules.AuthRegister, level: EventLevels.Warning,
+                userEmail: email);
+
+            // Delete the pending row so the user isn't blocked from retrying.
+            Db.PendingRegistrations.Remove(pending);
+            await Db.SaveChangesAsync();
+
+            errorMessage = "No pudimos enviar el correo con el código. Intentá de nuevo en unos minutos.";
+            return;
         }
 
         RedirectManager.RedirectTo(
-            "Account/RegisterConfirmation",
+            "Account/VerifyCode",
             new Dictionary<string, object?> { ["email"] = email });
     }
 
-    private static AppUser CreateUser()
+    private static string HashCode(string code)
     {
-        try { return Activator.CreateInstance<AppUser>(); }
-        catch
-        {
-            throw new InvalidOperationException(
-                $"Can't instantiate '{nameof(AppUser)}'. Ensure it has a parameterless constructor.");
-        }
-    }
-
-    private IUserEmailStore<AppUser> GetEmailStore()
-    {
-        if (!UserManager.SupportsUserEmail)
-            throw new NotSupportedException("The default UI requires a user store with email support.");
-        return (IUserEmailStore<AppUser>)UserStore;
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(code));
+        return Convert.ToHexString(bytes);
     }
 
     private sealed class InputModel
@@ -215,15 +201,7 @@
 
         [Required(ErrorMessage = "El correo es requerido.")]
         [EmailAddress(ErrorMessage = "Correo no válido.")]
+        [StringLength(256)]
         public string Email { get; set; } = "";
-
-        [Required(ErrorMessage = "La contraseña es requerida.")]
-        [StringLength(100, MinimumLength = 8, ErrorMessage = "La contraseña debe tener al menos {2} caracteres.")]
-        [DataType(DataType.Password)]
-        public string Password { get; set; } = "";
-
-        [DataType(DataType.Password)]
-        [Compare(nameof(Password), ErrorMessage = "Las contraseñas no coinciden.")]
-        public string ConfirmPassword { get; set; } = "";
     }
 }
