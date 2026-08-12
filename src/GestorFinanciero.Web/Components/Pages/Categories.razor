@@ -7,6 +7,7 @@
 @using GestorFinanciero.Domain.Enums
 
 @inject ICategoryService CategoryService
+@inject IAppEventLogger AppEvents
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -228,7 +229,8 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Categories", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
         }
         finally
         {
@@ -256,7 +258,8 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Categories", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
         }
     }
 
