@@ -1,69 +1,121 @@
 @page "/Account/Register"
+@layout AuthLayout
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
 
 @using System.ComponentModel.DataAnnotations
+@using System.Text
 @using GestorFinanciero.Application.Interfaces
 @using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Email
 @using GestorFinanciero.Infrastructure.Identity
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.WebUtilities
 
 @inject UserManager<AppUser> UserManager
 @inject IUserStore<AppUser> UserStore
 @inject SignInManager<AppUser> SignInManager
 @inject ICategorySeeder CategorySeeder
+@inject IEmailService EmailService
 @inject IAppEventLogger AppEvents
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Crear cuenta</PageTitle>
+<PageTitle>Crear cuenta — Gestor Financiero</PageTitle>
 
-<div class="auth-shell">
-    <div class="auth-card">
-        <h1>Crear cuenta</h1>
-        <p class="lead">Empezá a llevar el control de tus finanzas.</p>
+<MudPaper Elevation="4" Class="auth-card pa-8" Square="false">
+    <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.PersonAdd"
+                 Color="Color.Primary"
+                 Size="Size.Large" />
+        <div>
+            <MudText Typo="Typo.h5">Crear cuenta</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Empezá a llevar el control de tus finanzas.
+            </MudText>
+        </div>
+    </MudStack>
 
-        <StatusMessage Message="@errorMessage" />
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4" Dense="true">
+            @errorMessage
+        </MudAlert>
+    }
 
-        <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="form-errors" role="alert" />
+    <EditForm Model="Input" asp-route-returnUrl="@ReturnUrl" method="post" OnValidSubmit="RegisterUser" FormName="register">
+        <DataAnnotationsValidator />
 
-            <div class="field">
-                <label for="fullname">Nombre completo</label>
-                <InputText id="fullname" @bind-Value="Input.FullName" class="form-control" autocomplete="name" placeholder="Alejandro Montepeque" />
-                <ValidationMessage For="() => Input.FullName" class="field-error" />
+        <MudStack Spacing="4">
+            <MudTextField T="string"
+                          Label="Nombre completo"
+                          @bind-Value="Input.FullName"
+                          For="() => Input.FullName"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Person"
+                          UserAttributes="@(new Dictionary<string, object?> { ["autocomplete"] = "name", ["name"] = "Input.FullName" })" />
+
+            <MudTextField T="string"
+                          Label="Correo electrónico"
+                          @bind-Value="Input.Email"
+                          For="() => Input.Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Email"
+                          UserAttributes="@(new Dictionary<string, object?> { ["autocomplete"] = "username", ["name"] = "Input.Email" })" />
+
+            <div class="gf-strength-wrap">
+                <MudTextField T="string"
+                              Label="Contraseña"
+                              @bind-Value="Input.Password"
+                              For="() => Input.Password"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Password"
+                              HelperText="Mínimo 8 caracteres, con al menos un número."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Lock"
+                              UserAttributes="@(new Dictionary<string, object?> {
+                                  ["autocomplete"] = "new-password",
+                                  ["name"] = "Input.Password",
+                                  ["data-strength-meter"] = "true" })" />
+                <div class="gf-strength-bar gf-strength-0"></div>
+                <div class="gf-strength-label"></div>
             </div>
 
-            <div class="field">
-                <label for="email">Correo electrónico</label>
-                <InputText id="email" @bind-Value="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="tu@correo.com" />
-                <ValidationMessage For="() => Input.Email" class="field-error" />
-            </div>
+            <MudTextField T="string"
+                          Label="Confirmar contraseña"
+                          @bind-Value="Input.ConfirmPassword"
+                          For="() => Input.ConfirmPassword"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.Lock"
+                          UserAttributes="@(new Dictionary<string, object?> { ["autocomplete"] = "new-password", ["name"] = "Input.ConfirmPassword" })" />
 
-            <div class="field">
-                <label for="password">Contraseña</label>
-                <InputText type="password" id="password" @bind-Value="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="Mínimo 8 caracteres" />
-                <ValidationMessage For="() => Input.Password" class="field-error" />
-            </div>
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                       FullWidth="true">
+                Crear cuenta
+            </MudButton>
+        </MudStack>
+    </EditForm>
 
-            <div class="field">
-                <label for="confirm">Confirmar contraseña</label>
-                <InputText type="password" id="confirm" @bind-Value="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" />
-                <ValidationMessage For="() => Input.ConfirmPassword" class="field-error" />
-            </div>
+    <MudDivider Class="my-6" />
 
-            <button type="submit" class="btn btn-primary w-100">Crear cuenta</button>
-        </EditForm>
-
-        <p class="auth-footer">
-            ¿Ya tenés cuenta? <a href="Account/Login">Iniciar sesión</a>
-        </p>
-    </div>
-</div>
+    <MudStack Row Justify="Justify.Center" Spacing="1">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">¿Ya tenés cuenta?</MudText>
+        <MudLink Href="Account/Login" Underline="Underline.Hover">Iniciar sesión</MudLink>
+    </MudStack>
+</MudPaper>
 
 @code {
     private const string GenericErrorMessage =
-        "Error: No pudimos crear la cuenta. Revisá los datos e intentá de nuevo.";
+        "No pudimos crear la cuenta. Revisá los datos e intentá de nuevo.";
 
     private string? errorMessage;
 
@@ -104,28 +156,43 @@
             return;
         }
 
-        Logger.LogInformation("User created a new account with password.");
-
         await AppEvents.LogAsync(
             module: EventModules.AuthRegister,
             action: EventActions.Success,
             message: "New account created.",
-            level: EventLevels.Info,
             userId: user.Id,
             userEmail: email);
 
         await CategorySeeder.SeedForUserAsync(user.Id);
 
-        await SignInManager.SignInAsync(user, isPersistent: false);
-        RedirectManager.RedirectTo(ReturnUrl);
+        // Send email confirmation link. The user can't log in until they click.
+        var confirmToken = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(confirmToken));
+        var confirmUrl = NavigationManager.GetUriWithQueryParameters(
+            NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
+            new Dictionary<string, object?> { ["userId"] = user.Id, ["code"] = encodedToken });
+
+        try
+        {
+            await EmailService.SendAsync(
+                email,
+                "Confirmá tu email en Gestor Financiero",
+                EmailTemplates.ConfirmEmail(user.FullName, confirmUrl));
+        }
+        catch (Exception emailEx)
+        {
+            Logger.LogWarning(emailEx, "Failed to send confirmation email to {Email}", email);
+            await AppEvents.LogExceptionAsync(emailEx, "Email.Confirm", level: EventLevels.Warning);
+        }
+
+        RedirectManager.RedirectTo(
+            "Account/RegisterConfirmation",
+            new Dictionary<string, object?> { ["email"] = email });
     }
 
     private static AppUser CreateUser()
     {
-        try
-        {
-            return Activator.CreateInstance<AppUser>();
-        }
+        try { return Activator.CreateInstance<AppUser>(); }
         catch
         {
             throw new InvalidOperationException(
@@ -143,23 +210,19 @@
     private sealed class InputModel
     {
         [Required(ErrorMessage = "El nombre es requerido.")]
-        [StringLength(120, ErrorMessage = "El nombre debe tener entre {2} y {1} caracteres.", MinimumLength = 2)]
-        [Display(Name = "Nombre completo")]
+        [StringLength(120, MinimumLength = 2, ErrorMessage = "El nombre debe tener entre {2} y {1} caracteres.")]
         public string FullName { get; set; } = "";
 
         [Required(ErrorMessage = "El correo es requerido.")]
         [EmailAddress(ErrorMessage = "Correo no válido.")]
-        [Display(Name = "Email")]
         public string Email { get; set; } = "";
 
         [Required(ErrorMessage = "La contraseña es requerida.")]
-        [StringLength(100, ErrorMessage = "La contraseña debe tener al menos {2} caracteres.", MinimumLength = 8)]
+        [StringLength(100, MinimumLength = 8, ErrorMessage = "La contraseña debe tener al menos {2} caracteres.")]
         [DataType(DataType.Password)]
-        [Display(Name = "Contraseña")]
         public string Password { get; set; } = "";
 
         [DataType(DataType.Password)]
-        [Display(Name = "Confirmar contraseña")]
         [Compare(nameof(Password), ErrorMessage = "Las contraseñas no coinciden.")]
         public string ConfirmPassword { get; set; } = "";
     }

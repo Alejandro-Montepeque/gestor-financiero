@@ -1,0 +1,125 @@
+@page "/Account/ConfirmEmail"
+@layout AuthLayout
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+
+@using System.Text
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Application.DTOs
+@using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Email
+@using GestorFinanciero.Infrastructure.Identity
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.WebUtilities
+
+@inject UserManager<AppUser> UserManager
+@inject IEmailService EmailService
+@inject IAppEventLogger AppEvents
+@inject ILogger<ConfirmEmail> Logger
+
+<PageTitle>Confirmando email — Gestor Financiero</PageTitle>
+
+<MudPaper Elevation="4" Class="auth-card pa-8 text-center">
+    @if (_state == State.Loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">Verificando…</MudText>
+    }
+    else if (_state == State.Success)
+    {
+        <MudIcon Icon="@Icons.Material.Filled.MarkEmailRead" Color="Color.Success" Size="Size.Large" Class="mb-3" />
+        <MudText Typo="Typo.h5" Class="mb-2">¡Email confirmado!</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" Style="max-width:400px;margin:0 auto">
+            Ya podés iniciar sesión con tu cuenta. También te mandamos un email
+            de bienvenida con los primeros pasos.
+        </MudText>
+        <MudButton Href="Account/Login" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login">
+            Iniciar sesión
+        </MudButton>
+    }
+    else
+    {
+        <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Size="Size.Large" Class="mb-3" />
+        <MudText Typo="Typo.h5" Class="mb-2">Link inválido o expirado</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" Style="max-width:400px;margin:0 auto">
+            No pudimos verificar tu email. Registrate de nuevo o contactanos.
+        </MudText>
+        <MudButton Href="Account/Register" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd">
+            Volver a registrarse
+        </MudButton>
+    }
+</MudPaper>
+
+@code {
+    private enum State { Loading, Success, Failed }
+    private State _state = State.Loading;
+
+    [SupplyParameterFromQuery(Name = "userId")]
+    private string? UserIdRaw { get; set; }
+
+    [SupplyParameterFromQuery(Name = "code")]
+    private string? Code { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(UserIdRaw) || string.IsNullOrEmpty(Code))
+        {
+            _state = State.Failed;
+            return;
+        }
+
+        if (!Guid.TryParse(UserIdRaw, out var userId))
+        {
+            _state = State.Failed;
+            return;
+        }
+
+        var user = await UserManager.FindByIdAsync(userId.ToString());
+        if (user is null)
+        {
+            _state = State.Failed;
+            return;
+        }
+
+        string decoded;
+        try { decoded = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(Code)); }
+        catch (FormatException) { _state = State.Failed; return; }
+
+        var result = await UserManager.ConfirmEmailAsync(user, decoded);
+        if (!result.Succeeded)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthRegister,
+                action: EventActions.Failed,
+                message: "Email confirmation failed.",
+                level: EventLevels.Warning,
+                failureReason: string.Join(",", result.Errors.Select(e => e.Code)),
+                userId: user.Id,
+                userEmail: user.Email);
+
+            _state = State.Failed;
+            return;
+        }
+
+        await AppEvents.LogAsync(
+            module: EventModules.AuthRegister,
+            action: EventActions.Success,
+            message: "Email confirmed.",
+            userId: user.Id,
+            userEmail: user.Email);
+
+        // Fire the welcome email now that the address is verified.
+        try
+        {
+            await EmailService.SendAsync(
+                user.Email!,
+                "¡Bienvenido a Gestor Financiero!",
+                EmailTemplates.Welcome(user.FullName));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to send welcome email post-confirmation to {Email}", user.Email);
+        }
+
+        _state = State.Success;
+    }
+}

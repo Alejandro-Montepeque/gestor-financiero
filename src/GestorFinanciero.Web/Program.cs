@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 using GestorFinanciero.Application.Interfaces;
 using GestorFinanciero.Domain.Constants;
 using GestorFinanciero.Infrastructure;
@@ -9,12 +10,17 @@ using GestorFinanciero.Web.Components.Account;
 using GestorFinanciero.Web.Infrastructure;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ─── Blazor Server ──────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// ─── MudBlazor (dialogs, snackbar, popover, resize watcher) ─────────────
+builder.Services.AddMudServices();
 
 // ─── Infrastructure: EF Core + Postgres + Identity ──────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -33,6 +39,40 @@ builder.Services.AddAuthentication(options =>
 .AddIdentityCookies();
 
 builder.Services.AddAuthorization();
+
+// ─── Rate limiter: throttle brute force at the HTTP layer ───────────────
+// The lockout in Identity is *per account*; this limiter is *per IP* so a
+// single client can't try 100 emails × 5 passwords in a row.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // /Account/Login → 5 attempts / minute per IP.
+    options.AddPolicy("auth-login", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true,
+            }));
+
+    // /Account/Register + /Account/ForgotPassword → 3 attempts / 5 min per IP.
+    options.AddPolicy("auth-sensitive", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 3,
+                Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true,
+            }));
+});
 
 var app = builder.Build();
 
@@ -62,6 +102,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
+app.UseRateLimiter();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

@@ -1,4 +1,5 @@
 using GestorFinanciero.Application.Interfaces;
+using GestorFinanciero.Infrastructure.Email;
 using GestorFinanciero.Infrastructure.Identity;
 using GestorFinanciero.Infrastructure.Persistence;
 using GestorFinanciero.Infrastructure.Persistence.Interceptors;
@@ -59,7 +60,7 @@ public static class DependencyInjection
             .AddIdentityCore<AppUser>(options =>
             {
                 options.User.RequireUniqueEmail = true;
-                options.SignIn.RequireConfirmedEmail = false; // enable once email sending is wired.
+                options.SignIn.RequireConfirmedEmail = true; // requires confirmed email to log in
                 options.Password.RequireDigit = true;
                 options.Password.RequireLowercase = true;
                 options.Password.RequireUppercase = false;
@@ -69,7 +70,11 @@ public static class DependencyInjection
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AppDbContext>()
             .AddSignInManager()
-            .AddDefaultTokenProviders();
+            .AddDefaultTokenProviders()
+            .AddPasswordValidator<HibpPasswordValidator<AppUser>>();
+
+        // HttpClient factory for HibpPasswordValidator.
+        services.AddHttpClient();
 
         // Application-level services implemented by Infrastructure.
         services.AddHttpContextAccessor();
@@ -77,7 +82,12 @@ public static class DependencyInjection
         services.AddScoped<ICategorySeeder, CategorySeeder>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<ITransactionService, TransactionService>();
+        services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAppEventLogger, AppEventLogger>();
+
+        // Email transport (SMTP via MailKit).
+        services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        services.AddScoped<IEmailService, SmtpEmailService>();
 
         // Seeder framework. Register each ISeeder implementation below; the
         // runner reads them all at startup and executes the pending ones.

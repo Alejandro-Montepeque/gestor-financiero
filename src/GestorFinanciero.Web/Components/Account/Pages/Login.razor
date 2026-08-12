@@ -1,4 +1,6 @@
 @page "/Account/Login"
+@layout AuthLayout
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
 
 @using System.ComponentModel.DataAnnotations
 @using GestorFinanciero.Application.Interfaces
@@ -14,54 +16,94 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Iniciar sesión</PageTitle>
+<PageTitle>Iniciar sesión — Gestor Financiero</PageTitle>
 
-<div class="auth-shell">
-    <div class="auth-card">
-        <h1>Iniciar sesión</h1>
-        <p class="lead">Continuá donde lo dejaste.</p>
+<MudPaper Elevation="4" Class="auth-card pa-8" Square="false">
+    <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet"
+                 Color="Color.Primary"
+                 Size="Size.Large" />
+        <div>
+            <MudText Typo="Typo.h5">Iniciar sesión</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Continuá donde lo dejaste.
+            </MudText>
+        </div>
+    </MudStack>
 
-        <StatusMessage Message="@errorMessage" />
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4" Dense="true">
+            @errorMessage
+        </MudAlert>
+    }
 
-        <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="form-errors" role="alert" />
+    <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
+        <DataAnnotationsValidator />
 
-            <div class="field">
-                <label for="email">Correo electrónico</label>
-                <InputText id="email" @bind-Value="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="tu@correo.com" />
-                <ValidationMessage For="() => Input.Email" class="field-error" />
-            </div>
+        <MudStack Spacing="4">
+            <MudTextField T="string"
+                          Label="Correo electrónico"
+                          @bind-Value="Input.Email"
+                          For="() => Input.Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Email"
+                          UserAttributes="@_emailAttrs" />
 
-            <div class="field">
-                <label for="password">Contraseña</label>
-                <InputText type="password" id="password" @bind-Value="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" />
-                <ValidationMessage For="() => Input.Password" class="field-error" />
-            </div>
+            <MudTextField T="string"
+                          Label="Contraseña"
+                          @bind-Value="Input.Password"
+                          For="() => Input.Password"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Lock"
+                          UserAttributes="@_passwordAttrs" />
 
-            <div class="field-inline">
-                <label class="checkbox">
-                    <InputCheckbox @bind-Value="Input.RememberMe" />
-                    <span>Recordarme</span>
-                </label>
-            </div>
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudCheckBox T="bool" @bind-Value="Input.RememberMe" Color="Color.Primary" Label="Recordarme" />
+                <MudLink Href="Account/ForgotPassword" Underline="Underline.Hover" Typo="Typo.body2">
+                    ¿Olvidaste tu contraseña?
+                </MudLink>
+            </MudStack>
 
-            <button type="submit" class="btn btn-primary w-100">Entrar</button>
-        </EditForm>
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.Login"
+                       FullWidth="true">
+                Entrar
+            </MudButton>
+        </MudStack>
+    </EditForm>
 
-        <p class="auth-footer">
-            ¿Sin cuenta? <a href="Account/Register">Registrate acá</a>
-        </p>
-    </div>
-</div>
+    <MudDivider Class="my-6" />
+
+    <MudStack Row Justify="Justify.Center" Spacing="1">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">¿Sin cuenta?</MudText>
+        <MudLink Href="Account/Register" Underline="Underline.Hover">Registrate acá</MudLink>
+    </MudStack>
+</MudPaper>
 
 @code {
-    // Single generic message shown for ANY authentication failure. The real
-    // reason (user_not_found, wrong_password, locked_out, ...) is recorded in
-    // the app_events table via IAppEventLogger and never leaked to the UI.
-    private const string GenericErrorMessage = "Error: Correo o contraseña incorrectos.";
+    private const string GenericErrorMessage = "Correo o contraseña incorrectos.";
 
     private string? errorMessage;
+
+    private readonly Dictionary<string, object?> _emailAttrs = new()
+    {
+        ["autocomplete"] = "username",
+        ["name"] = "Input.Email",
+    };
+
+    private readonly Dictionary<string, object?> _passwordAttrs = new()
+    {
+        ["autocomplete"] = "current-password",
+        ["name"] = "Input.Password",
+    };
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
@@ -85,9 +127,6 @@
     public async Task LoginUser()
     {
         var email = Input.Email.Trim();
-
-        // Look up first so we can log a specific failure reason without leaking
-        // it in the UI (see GenericErrorMessage).
         var user = await UserManager.FindByEmailAsync(email);
 
         if (user is null)
@@ -105,10 +144,7 @@
         }
 
         var result = await SignInManager.PasswordSignInAsync(
-            user,
-            Input.Password,
-            Input.RememberMe,
-            lockoutOnFailure: true);
+            user, Input.Password, Input.RememberMe, lockoutOnFailure: true);
 
         if (result.Succeeded)
         {
@@ -116,7 +152,6 @@
                 module: EventModules.AuthLogin,
                 action: EventActions.Success,
                 message: "Login OK.",
-                level: EventLevels.Info,
                 userId: user.Id,
                 userEmail: email);
 
@@ -141,7 +176,6 @@
 
         if (result.IsLockedOut)
         {
-            Logger.LogWarning("User account locked out.");
             RedirectManager.RedirectTo("Account/Lockout");
             return;
         }
@@ -159,7 +193,6 @@
         [DataType(DataType.Password)]
         public string Password { get; set; } = "";
 
-        [Display(Name = "Recordarme")]
         public bool RememberMe { get; set; }
     }
 }
