@@ -1,0 +1,159 @@
+@page "/Account/Manage/Sessions"
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using System.Globalization
+@using System.Security.Claims
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Identity
+@using GestorFinanciero.Web.Components.Account.Shared
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<AppUser> UserManager
+@inject SignInManager<AppUser> SignInManager
+@inject IdentityUserAccessor UserAccessor
+@inject IdentityRedirectManager RedirectManager
+@inject IAppEventLogger AppEvents
+
+<PageTitle>Sesiones — Gestor Financiero</PageTitle>
+
+<MudGrid>
+    <MudItem xs="12" md="3">
+        <ManageNav />
+    </MudItem>
+
+    <MudItem xs="12" md="9">
+        <MudStack Spacing="4">
+            <div>
+                <MudText Typo="Typo.h4">Sesiones activas</MudText>
+                <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                    Estás usando una cookie de sesión para acceder al panel. Podés cerrar sesión en todos los dispositivos si sospechás que alguien más entró a tu cuenta.
+                </MudText>
+            </div>
+
+            <StatusMessage />
+
+            <MudPaper Elevation="0" Class="gf-panel pa-6">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Class="mb-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Devices" Color="Color.Primary" Size="Size.Large" />
+                    <div style="flex:1">
+                        <MudText Typo="Typo.subtitle1" Class="font-weight-medium">Sesión actual</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Este es el navegador que estás usando ahora mismo.</MudText>
+                    </div>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled"
+                             Icon="@Icons.Material.Filled.Circle">
+                        Activa
+                    </MudChip>
+                </MudStack>
+
+                <MudDivider Class="my-3" />
+
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary">Dirección IP</MudText>
+                        <MudText Typo="Typo.body1" Style="font-family:monospace">@_ip</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary">Iniciada</MudText>
+                        <MudText Typo="Typo.body1">
+                            @(_issuedAt?.ToLocalTime().ToString("dd MMM yyyy — HH:mm", CultureInfo.GetCultureInfo("es-ES")) ?? "—")
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary">Navegador / dispositivo</MudText>
+                        <MudText Typo="Typo.body2" Style="word-break:break-all">@_userAgent</MudText>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            <MudPaper Elevation="0" Class="gf-panel pa-6">
+                <MudText Typo="Typo.subtitle1" Class="font-weight-medium mb-2">Cerrar sesión en todos los dispositivos</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+                    Rota el security stamp de tu cuenta. Cualquier sesión abierta (incluso ésta) deja de ser válida en 30 minutos o menos, y todos los tokens de "recordarme" quedan revocados.
+                </MudText>
+
+                <EditForm Model="Input" method="post" OnValidSubmit="SignOutEverywhereAsync" FormName="signout-all">
+                    <AntiforgeryToken />
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.Logout">
+                        Cerrar sesión en todos los dispositivos
+                    </MudButton>
+                </EditForm>
+            </MudPaper>
+        </MudStack>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private AppUser _user = default!;
+    private string _ip = "—";
+    private string _userAgent = "—";
+    private DateTimeOffset? _issuedAt;
+
+    // Empty model just to satisfy EditForm — the whole form is a single POST button.
+    // See Index.razor: keep default! + set in OnInitialized to dodge BL0008.
+    [SupplyParameterFromForm]
+    private SignOutForm Input { get; set; } = default!;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+
+        _ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "—";
+        _userAgent = HttpContext.Request.Headers.UserAgent.ToString();
+        if (string.IsNullOrWhiteSpace(_userAgent)) _userAgent = "—";
+
+        // Cookie authentication stamps an "IssuedUtc" on the ticket when you sign in.
+        var authResult = await HttpContext.AuthenticateAsync(IdentityConstants.ApplicationScheme);
+        _issuedAt = authResult?.Properties?.IssuedUtc;
+    }
+
+    private async Task SignOutEverywhereAsync()
+    {
+        // Rotating the security stamp invalidates every existing auth cookie the
+        // next time it's checked (see IdentityRevalidatingAuthenticationStateProvider,
+        // which refreshes every 30 min). Also drops any "remember me" tokens.
+        var result = await UserManager.UpdateSecurityStampAsync(_user);
+        if (!result.Succeeded)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthSessions,
+                action: EventActions.Failed,
+                message: "SignOut everywhere failed: " + string.Join("; ", result.Errors.Select(e => e.Description)),
+                level: EventLevels.Warning,
+                userId: _user.Id,
+                userEmail: _user.Email);
+
+            RedirectManager.RedirectToCurrentPageWithStatus(
+                "No pudimos cerrar las sesiones. Intentá de nuevo.", HttpContext);
+            return;
+        }
+
+        await AppEvents.LogAsync(
+            module: EventModules.AuthSessions,
+            action: EventActions.Success,
+            message: "Security stamp rotated — all sessions revoked.",
+            userId: _user.Id,
+            userEmail: _user.Email);
+
+        // Sign out this browser immediately so the user lands on Login right away.
+        await SignInManager.SignOutAsync();
+        RedirectManager.RedirectTo("Account/Login");
+    }
+
+    // Marker class — EditForm needs a non-null Model instance even if the form
+    // has no fields to bind (single POST button).
+    private sealed class SignOutForm { }
+}

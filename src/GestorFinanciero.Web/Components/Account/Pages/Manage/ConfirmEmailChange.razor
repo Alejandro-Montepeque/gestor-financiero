@@ -1,0 +1,160 @@
+@page "/Account/Manage/ConfirmEmailChange"
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using System.Text
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Email
+@using GestorFinanciero.Infrastructure.Identity
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.WebUtilities
+
+@inject UserManager<AppUser> UserManager
+@inject SignInManager<AppUser> SignInManager
+@inject IdentityRedirectManager RedirectManager
+@inject IAppEventLogger AppEvents
+@inject IEmailService EmailService
+@inject NavigationManager NavigationManager
+@inject ILogger<ConfirmEmailChange> Logger
+
+<PageTitle>Confirmar cambio de correo — Gestor Financiero</PageTitle>
+
+<MudGrid Justify="Justify.Center">
+    <MudItem xs="12" md="6">
+        <MudPaper Elevation="0" Class="gf-panel pa-6 text-center">
+            @if (_success)
+            {
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                <MudText Typo="Typo.h5" Class="mt-3">Correo actualizado</MudText>
+                <MudText Class="mud-text-secondary mt-1">
+                    Tu nuevo correo ya está activo. La próxima vez que inicies sesión, usá <strong>@_confirmedEmail</strong>.
+                </MudText>
+                <MudButton Href="Account/Manage"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Class="mt-4"
+                           StartIcon="@Icons.Material.Filled.ArrowBack">
+                    Volver a mi cuenta
+                </MudButton>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Size="Size.Large" />
+                <MudText Typo="Typo.h5" Class="mt-3">Link inválido</MudText>
+                <MudText Class="mud-text-secondary mt-1">
+                    El link expiró o ya se usó. Volvé a pedir el cambio desde tu cuenta.
+                </MudText>
+                <MudButton Href="Account/Manage/Email"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Class="mt-4"
+                           StartIcon="@Icons.Material.Filled.Refresh">
+                    Reintentar
+                </MudButton>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _success;
+    private string? _confirmedEmail;
+
+    [SupplyParameterFromQuery(Name = "userId")]
+    private string? UserIdFromQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "email")]
+    private string? EmailFromQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "code")]
+    private string? CodeFromQuery { get; set; }
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UserIdFromQuery is null || EmailFromQuery is null || CodeFromQuery is null)
+            return;
+
+        if (!Guid.TryParse(UserIdFromQuery, out var userId))
+            return;
+
+        var user = await UserManager.FindByIdAsync(userId.ToString());
+        if (user is null) return;
+
+        string decodedToken;
+        try
+        {
+            decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(CodeFromQuery));
+        }
+        catch (FormatException) { return; }
+
+        // Snapshot the old email BEFORE ChangeEmailAsync overwrites it — we need
+        // it to send the security alert to the previous address.
+        var previousEmail = user.Email;
+
+        var result = await UserManager.ChangeEmailAsync(user, EmailFromQuery, decodedToken);
+        if (!result.Succeeded)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthEmail,
+                action: EventActions.Failed,
+                message: "Email change confirmation failed: " + string.Join("; ", result.Errors.Select(e => e.Description)),
+                level: EventLevels.Warning,
+                failureReason: string.Join(",", result.Errors.Select(e => e.Code)),
+                userId: user.Id,
+                userEmail: user.Email);
+            return;
+        }
+
+        // ChangeEmailAsync doesn't sync the login name; do it manually.
+        var setUsernameResult = await UserManager.SetUserNameAsync(user, EmailFromQuery);
+        if (!setUsernameResult.Succeeded)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthEmail,
+                action: EventActions.Failed,
+                message: "SetUserName failed after email change: " + string.Join("; ", setUsernameResult.Errors.Select(e => e.Description)),
+                level: EventLevels.Warning,
+                userId: user.Id,
+                userEmail: user.Email);
+            return;
+        }
+
+        await AppEvents.LogAsync(
+            module: EventModules.AuthEmail,
+            action: EventActions.Success,
+            message: "Email changed successfully.",
+            userId: user.Id,
+            userEmail: EmailFromQuery,
+            extra: $"previous={previousEmail}");
+
+        await SignInManager.RefreshSignInAsync(user);
+
+        // Fire-and-forget security alert to the PREVIOUS email so the original
+        // account owner learns about the change even if they lost access.
+        if (!string.IsNullOrEmpty(previousEmail))
+        {
+            try
+            {
+                var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "—";
+                var ua = HttpContext.Request.Headers.UserAgent.ToString();
+                await EmailService.SendAsync(
+                    previousEmail,
+                    "Tu correo fue cambiado — Gestor Financiero",
+                    EmailTemplates.EmailChanged(user.FullName, previousEmail, EmailFromQuery, ip, ua, DateTime.UtcNow));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to send email-change alert to previous {Email}", previousEmail);
+                await AppEvents.LogExceptionAsync(ex, EventModules.AuthEmail, level: EventLevels.Warning,
+                    userId: user.Id, userEmail: previousEmail);
+            }
+        }
+
+        _confirmedEmail = EmailFromQuery;
+        _success = true;
+    }
+}

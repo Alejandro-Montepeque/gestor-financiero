@@ -1,0 +1,30 @@
+@* Left-rail navigation shared by every /Account/Manage/* page.
+   Uses MudNavMenu / MudNavLink to match the main sidebar pattern. *@
+
+<MudPaper Elevation="0" Class="gf-panel pa-2">
+    <MudNavMenu Class="gf-navmenu">
+        <MudNavLink Href="Account/Manage"
+                    Match="NavLinkMatch.All"
+                    Icon="@Icons.Material.Filled.Person">
+            Perfil
+        </MudNavLink>
+        <MudNavLink Href="Account/Manage/Email"
+                    Icon="@Icons.Material.Filled.Email">
+            Correo
+        </MudNavLink>
+        <MudNavLink Href="Account/Manage/Password"
+                    Icon="@Icons.Material.Filled.Lock">
+            Contraseña
+        </MudNavLink>
+        <MudNavLink Href="Account/Manage/Sessions"
+                    Icon="@Icons.Material.Filled.Devices">
+            Sesiones
+        </MudNavLink>
+        <MudDivider Class="my-2" />
+        <MudNavLink Href="Account/Manage/Delete"
+                    Icon="@Icons.Material.Filled.DeleteForever"
+                    IconColor="Color.Error">
+            Borrar cuenta
+        </MudNavLink>
+    </MudNavMenu>
+</MudPaper>

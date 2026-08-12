@@ -1,0 +1,200 @@
+@page "/Account/Manage/Email"
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using System.ComponentModel.DataAnnotations
+@using System.Text
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Email
+@using GestorFinanciero.Infrastructure.Identity
+@using GestorFinanciero.Web.Components.Account.Shared
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.WebUtilities
+
+@inject UserManager<AppUser> UserManager
+@inject IEmailService EmailService
+@inject IdentityUserAccessor UserAccessor
+@inject IdentityRedirectManager RedirectManager
+@inject IAppEventLogger AppEvents
+@inject NavigationManager NavigationManager
+@inject ILogger<Email> Logger
+
+<PageTitle>Cambiar correo — Gestor Financiero</PageTitle>
+
+@* Guard against null _user during the initial SSR pass. *@
+@if (_user is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+<MudGrid>
+    <MudItem xs="12" md="3">
+        <ManageNav />
+    </MudItem>
+
+    <MudItem xs="12" md="9">
+        <MudStack Spacing="4">
+            <div>
+                <MudText Typo="Typo.h4">Correo electrónico</MudText>
+                <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                    Actualizá tu correo. Vamos a mandarte un link de confirmación al nuevo correo — hasta que hagas click, el correo actual sigue activo.
+                </MudText>
+            </div>
+
+            <StatusMessage />
+
+            <MudPaper Elevation="0" Class="gf-panel pa-6">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="3" Class="mb-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Email" Color="Color.Primary" />
+                    <div style="flex:1">
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary">Correo actual</MudText>
+                        <MudText Typo="Typo.body1">@_user.Email</MudText>
+                    </div>
+                    @if (_user.EmailConfirmed)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text"
+                                 Icon="@Icons.Material.Filled.CheckCircle">
+                            Verificado
+                        </MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text"
+                                 Icon="@Icons.Material.Filled.Warning">
+                            Sin verificar
+                        </MudChip>
+                    }
+                </MudStack>
+
+                <MudDivider Class="my-4" />
+
+                <EditForm Model="Input" method="post" OnValidSubmit="OnValidSubmitAsync" FormName="manage-email">
+                    <DataAnnotationsValidator />
+
+                    <MudStack Spacing="4">
+                        <MudTextField T="string"
+                                      Label="Nuevo correo electrónico"
+                                      @bind-Value="Input.NewEmail"
+                                      For="() => Input.NewEmail"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Email"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.AlternateEmail"
+                                      UserAttributes="@(new Dictionary<string, object?> {
+                                          ["autocomplete"] = "email",
+                                          ["name"] = "Input.NewEmail" })" />
+
+                        <MudStack Row Justify="Justify.FlexEnd">
+                            <MudButton ButtonType="ButtonType.Submit"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Send">
+                                Enviar confirmación
+                            </MudButton>
+                        </MudStack>
+                    </MudStack>
+                </EditForm>
+            </MudPaper>
+        </MudStack>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private AppUser _user = default!;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // See Index.razor: two-phase init so EditForm doesn't hit a null Model on
+    // the first render, while keeping the [SupplyParameterFromForm] contract clean.
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+    }
+
+    private async Task OnValidSubmitAsync()
+    {
+        var newEmail = Input.NewEmail.Trim();
+
+        if (string.Equals(newEmail, _user.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            RedirectManager.RedirectToCurrentPageWithStatus(
+                "El correo ingresado es el mismo que el actual.", HttpContext);
+            return;
+        }
+
+        // Deny early if the address is already in use by someone else.
+        var existing = await UserManager.FindByEmailAsync(newEmail);
+        if (existing is not null && existing.Id != _user.Id)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthEmail,
+                action: EventActions.Failed,
+                message: "Email change requested but address is already taken.",
+                level: EventLevels.Warning,
+                failureReason: "email_in_use",
+                userId: _user.Id,
+                userEmail: _user.Email,
+                extra: $"target={newEmail}");
+
+            // Same generic message either way — don't leak account existence.
+            RedirectManager.RedirectToCurrentPageWithStatus(
+                "Si el correo es válido, te enviamos un link de confirmación.", HttpContext);
+            return;
+        }
+
+        var token = await UserManager.GenerateChangeEmailTokenAsync(_user, newEmail);
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+        var confirmUrl = NavigationManager.GetUriWithQueryParameters(
+            NavigationManager.ToAbsoluteUri("Account/Manage/ConfirmEmailChange").AbsoluteUri,
+            new Dictionary<string, object?>
+            {
+                ["userId"] = _user.Id,
+                ["email"]  = newEmail,
+                ["code"]   = encodedToken,
+            });
+
+        try
+        {
+            await EmailService.SendAsync(
+                newEmail,
+                "Confirmá tu nuevo email en Gestor Financiero",
+                EmailTemplates.ChangeEmail(_user.FullName, newEmail, confirmUrl));
+
+            await AppEvents.LogAsync(
+                module: EventModules.AuthEmail,
+                action: EventActions.Attempt,
+                message: "Change email requested — confirmation sent.",
+                userId: _user.Id,
+                userEmail: _user.Email,
+                extra: $"target={newEmail}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to send email-change confirmation to {Email}", newEmail);
+            await AppEvents.LogExceptionAsync(ex, EventModules.AuthEmail, level: EventLevels.Warning,
+                userId: _user.Id, userEmail: _user.Email);
+        }
+
+        RedirectManager.RedirectToCurrentPageWithStatus(
+            "Te enviamos un link de confirmación al nuevo correo.", HttpContext);
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "El correo es requerido.")]
+        [EmailAddress(ErrorMessage = "Correo no válido.")]
+        public string NewEmail { get; set; } = "";
+    }
+}

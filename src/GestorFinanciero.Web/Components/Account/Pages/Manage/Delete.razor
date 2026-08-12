@@ -1,0 +1,189 @@
+@page "/Account/Manage/Delete"
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using System.ComponentModel.DataAnnotations
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Identity
+@using GestorFinanciero.Web.Components.Account.Shared
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<AppUser> UserManager
+@inject SignInManager<AppUser> SignInManager
+@inject IdentityUserAccessor UserAccessor
+@inject IdentityRedirectManager RedirectManager
+@inject IAppEventLogger AppEvents
+
+<PageTitle>Borrar cuenta — Gestor Financiero</PageTitle>
+
+<MudGrid>
+    <MudItem xs="12" md="3">
+        <ManageNav />
+    </MudItem>
+
+    <MudItem xs="12" md="9">
+        <MudStack Spacing="4">
+            <div>
+                <MudText Typo="Typo.h4" Style="color: var(--mud-palette-error)">Borrar cuenta</MudText>
+                <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                    Esta acción es <strong>irreversible</strong>. Vamos a borrar tu perfil, categorías, transacciones, presupuestos, deudas y todo el historial asociado.
+                </MudText>
+            </div>
+
+            <StatusMessage />
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense="true">
+                    @_errorMessage
+                </MudAlert>
+            }
+
+            <MudPaper Elevation="0" Class="gf-panel pa-6" Style="border-color: rgba(244, 67, 54, 0.35)">
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4" Icon="@Icons.Material.Filled.Warning">
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">Antes de continuar</MudText>
+                    <MudText Typo="Typo.body2">
+                        Si querés conservar tus datos, descargá primero las transacciones desde /transactions → Exportar CSV.
+                    </MudText>
+                </MudAlert>
+
+                <EditForm Model="Input" method="post" OnValidSubmit="OnValidSubmitAsync" FormName="delete-account">
+                    <DataAnnotationsValidator />
+
+                    <MudStack Spacing="4">
+                        <MudTextField T="string"
+                                      Label="Confirmá tu contraseña para continuar"
+                                      @bind-Value="Input.Password"
+                                      For="() => Input.Password"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Password"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Lock"
+                                      UserAttributes="@(new Dictionary<string, object?> {
+                                          ["autocomplete"] = "current-password",
+                                          ["name"] = "Input.Password" })" />
+
+                        <MudTextField T="string"
+                                      Label='Escribí "BORRAR" para confirmar'
+                                      @bind-Value="Input.Confirmation"
+                                      For="() => Input.Confirmation"
+                                      Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.WarningAmber"
+                                      UserAttributes="@(new Dictionary<string, object?> { ["name"] = "Input.Confirmation" })" />
+
+                        <MudStack Row Justify="Justify.FlexEnd" Spacing="2">
+                            <MudButton Href="Account/Manage"
+                                       Variant="Variant.Text">
+                                Cancelar
+                            </MudButton>
+                            <MudButton ButtonType="ButtonType.Submit"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.DeleteForever">
+                                Borrar mi cuenta
+                            </MudButton>
+                        </MudStack>
+                    </MudStack>
+                </EditForm>
+            </MudPaper>
+        </MudStack>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private const string RequiredConfirmation = "BORRAR";
+
+    private AppUser _user = default!;
+    private string? _errorMessage;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // See Index.razor: two-phase init so EditForm doesn't hit a null Model on
+    // the first render, while keeping the [SupplyParameterFromForm] contract clean.
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+    }
+
+    private async Task OnValidSubmitAsync()
+    {
+        if (!string.Equals(Input.Confirmation?.Trim(), RequiredConfirmation, StringComparison.Ordinal))
+        {
+            _errorMessage = $"Tenés que escribir \"{RequiredConfirmation}\" exactamente para confirmar.";
+            return;
+        }
+
+        // Verify the password before doing anything destructive.
+        var passwordOk = await UserManager.CheckPasswordAsync(_user, Input.Password);
+        if (!passwordOk)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthDelete,
+                action: EventActions.Failed,
+                message: "Account deletion blocked — wrong password.",
+                level: EventLevels.Warning,
+                failureReason: "wrong_password",
+                userId: _user.Id,
+                userEmail: _user.Email);
+
+            _errorMessage = "Contraseña incorrecta.";
+            return;
+        }
+
+        // Log the intent BEFORE deleting so we don't lose the audit trail.
+        await AppEvents.LogAsync(
+            module: EventModules.AuthDelete,
+            action: EventActions.Attempt,
+            message: "Account deletion confirmed by user.",
+            userId: _user.Id,
+            userEmail: _user.Email);
+
+        var result = await UserManager.DeleteAsync(_user);
+        if (!result.Succeeded)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthDelete,
+                action: EventActions.Failed,
+                message: "DeleteAsync failed: " + string.Join("; ", result.Errors.Select(e => e.Description)),
+                level: EventLevels.Error,
+                failureReason: string.Join(",", result.Errors.Select(e => e.Code)),
+                userId: _user.Id,
+                userEmail: _user.Email);
+
+            _errorMessage = "No pudimos borrar la cuenta. Intentá de nuevo o contactá soporte.";
+            return;
+        }
+
+        // Best-effort final event without user_id (the FK is gone) — leaves a
+        // record so operators can trace deletions even after the row is gone.
+        await AppEvents.LogAsync(
+            module: EventModules.AuthDelete,
+            action: EventActions.Deleted,
+            message: "Account deleted.",
+            userEmail: _user.Email);
+
+        await SignInManager.SignOutAsync();
+        RedirectManager.RedirectTo("/");
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Ingresá tu contraseña para confirmar.")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        [Required(ErrorMessage = "Escribí BORRAR para confirmar.")]
+        public string Confirmation { get; set; } = "";
+    }
+}

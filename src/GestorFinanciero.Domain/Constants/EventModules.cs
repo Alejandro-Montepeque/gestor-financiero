@@ -12,6 +12,10 @@ public static class EventModules
     public const string AuthRegister    = "Auth.Register";
     public const string AuthLogout      = "Auth.Logout";
     public const string AuthPassword    = "Auth.Password";
+    public const string AuthProfile     = "Auth.Profile";
+    public const string AuthEmail       = "Auth.Email";
+    public const string AuthSessions    = "Auth.Sessions";
+    public const string AuthDelete      = "Auth.Delete";
 
     public const string ApiCategories   = "Api.Categories";
     public const string ApiTransactions = "Api.Transactions";

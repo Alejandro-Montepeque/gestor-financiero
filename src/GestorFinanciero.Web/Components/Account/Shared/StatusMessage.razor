@@ -3,13 +3,14 @@
 
 @if (!string.IsNullOrEmpty(DisplayMessage))
 {
-    var statusMessageClass = DisplayMessage.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
-        ? "alert-danger"
-        : "alert-success";
+    var isError = DisplayMessage.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
+                || DisplayMessage.StartsWith("No pudimos", StringComparison.OrdinalIgnoreCase);
 
-    <div class="alert @statusMessageClass" role="alert">
+    <MudAlert Severity="@(isError ? Severity.Error : Severity.Success)"
+              Variant="Variant.Filled"
+              Dense="true">
         @DisplayMessage
-    </div>
+    </MudAlert>
 }
 
 @code {

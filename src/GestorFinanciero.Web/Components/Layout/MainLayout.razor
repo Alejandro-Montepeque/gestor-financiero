@@ -20,9 +20,15 @@
                     <span class="gf-brand">Gestor Financiero</span>
                 </MudText>
                 <MudSpacer />
-                <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Person" Class="mr-3">
-                    @context.User.Identity?.Name
-                </MudChip>
+                <MudTooltip Text="Mi cuenta">
+                    <MudButton Href="Account/Manage"
+                               Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               StartIcon="@Icons.Material.Filled.Person"
+                               Class="mr-2">
+                        @context.User.Identity?.Name
+                    </MudButton>
+                </MudTooltip>
                 <form action="Account/Logout" method="post" class="d-inline">
                     <AntiforgeryToken />
                     <MudTooltip Text="Cerrar sesión">

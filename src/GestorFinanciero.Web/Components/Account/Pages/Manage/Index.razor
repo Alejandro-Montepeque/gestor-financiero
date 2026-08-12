@@ -1,0 +1,222 @@
+@page "/Account/Manage"
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using System.ComponentModel.DataAnnotations
+@using System.Globalization
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Identity
+@using GestorFinanciero.Web.Components.Account.Shared
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<AppUser> UserManager
+@inject SignInManager<AppUser> SignInManager
+@inject IdentityUserAccessor UserAccessor
+@inject IdentityRedirectManager RedirectManager
+@inject IAppEventLogger AppEvents
+
+<PageTitle>Mi perfil — Gestor Financiero</PageTitle>
+
+@* Guard: during static SSR the framework may render before OnInitializedAsync
+   finishes loading _user. Show a spinner instead of NREing on _user.Email. *@
+@if (_user is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+<MudGrid>
+    <MudItem xs="12" md="3">
+        <ManageNav />
+    </MudItem>
+
+    <MudItem xs="12" md="9">
+        <MudStack Spacing="4">
+            <div>
+                <MudText Typo="Typo.h4">Perfil</MudText>
+                <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                    Actualizá tus datos personales y preferencias.
+                </MudText>
+            </div>
+
+            <StatusMessage />
+
+            <MudPaper Elevation="0" Class="gf-panel pa-6">
+                <EditForm Model="Input" method="post" OnValidSubmit="OnValidSubmitAsync" FormName="manage-profile">
+                    <DataAnnotationsValidator />
+
+                    <MudStack Spacing="4">
+                        <MudTextField T="string"
+                                      Label="Nombre completo"
+                                      @bind-Value="Input.FullName"
+                                      For="() => Input.FullName"
+                                      Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Person"
+                                      UserAttributes="@(new Dictionary<string, object?> { ["name"] = "Input.FullName" })" />
+
+                        <MudSelect T="string"
+                                   Label="Moneda preferida"
+                                   @bind-Value="Input.PreferredCurrency"
+                                   For="() => Input.PreferredCurrency"
+                                   Variant="Variant.Outlined"
+                                   Adornment="Adornment.Start"
+                                   AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                   UserAttributes="@(new Dictionary<string, object?> { ["name"] = "Input.PreferredCurrency" })">
+                            <MudSelectItem Value="@("USD")">USD — Dólar estadounidense</MudSelectItem>
+                            <MudSelectItem Value="@("EUR")">EUR — Euro</MudSelectItem>
+                            <MudSelectItem Value="@("MXN")">MXN — Peso mexicano</MudSelectItem>
+                            <MudSelectItem Value="@("ARS")">ARS — Peso argentino</MudSelectItem>
+                            <MudSelectItem Value="@("SVC")">SVC — Colón salvadoreño</MudSelectItem>
+                            <MudSelectItem Value="@("GTQ")">GTQ — Quetzal guatemalteco</MudSelectItem>
+                        </MudSelect>
+
+                        <MudStack Row Justify="Justify.FlexEnd">
+                            <MudButton ButtonType="ButtonType.Submit"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Save">
+                                Guardar cambios
+                            </MudButton>
+                        </MudStack>
+                    </MudStack>
+                </EditForm>
+            </MudPaper>
+
+            <MudPaper Elevation="0" Class="gf-panel pa-6">
+                <MudText Typo="Typo.subtitle1" Class="mb-3">Información de la cuenta</MudText>
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary">Correo</MudText>
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <MudText Typo="Typo.body1">@_user.Email</MudText>
+                            @if (_user.EmailConfirmed)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text"
+                                         Icon="@Icons.Material.Filled.CheckCircle">
+                                    Verificado
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text"
+                                         Icon="@Icons.Material.Filled.Warning">
+                                    Sin verificar
+                                </MudChip>
+                            }
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary">Cuenta creada</MudText>
+                        <MudText Typo="Typo.body1">
+                            @_user.CreatedAt.ToString("dd 'de' MMMM 'de' yyyy", CultureInfo.GetCultureInfo("es-ES"))
+                        </MudText>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudStack>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private AppUser _user = default!;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // Two-phase init:
+    //  - OnInitialized (sync) runs FIRST and ensures Input isn't null before
+    //    the first render, so EditForm.OnParametersSet doesn't throw.
+    //  - OnInitializedAsync (async) hydrates Input from the user record on GET.
+    // Property initializer stays as default! to avoid the BL0008 warning that
+    // "[SupplyParameterFromForm] + initializer can be overwritten with null
+    // during form posts".
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await UserAccessor.GetRequiredUserAsync(HttpContext);
+
+        // Only hydrate on GET; on POST the form supplies user-entered values.
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            Input.FullName = _user.FullName;
+            Input.PreferredCurrency = string.IsNullOrEmpty(_user.PreferredCurrency)
+                ? "USD"
+                : _user.PreferredCurrency;
+        }
+    }
+
+    private async Task OnValidSubmitAsync()
+    {
+        var changed = false;
+
+        var newName = Input.FullName.Trim();
+        if (newName != _user.FullName)
+        {
+            _user.FullName = newName;
+            changed = true;
+        }
+
+        var newCurrency = string.IsNullOrWhiteSpace(Input.PreferredCurrency) ? "USD" : Input.PreferredCurrency.Trim().ToUpperInvariant();
+        if (newCurrency != _user.PreferredCurrency)
+        {
+            _user.PreferredCurrency = newCurrency;
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            RedirectManager.RedirectToCurrentPageWithStatus("Sin cambios que guardar.", HttpContext);
+            return;
+        }
+
+        var result = await UserManager.UpdateAsync(_user);
+
+        if (!result.Succeeded)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthProfile,
+                action: EventActions.Failed,
+                message: "Profile update failed: " + string.Join("; ", result.Errors.Select(e => e.Description)),
+                level: EventLevels.Warning,
+                failureReason: string.Join(",", result.Errors.Select(e => e.Code)),
+                userId: _user.Id,
+                userEmail: _user.Email);
+
+            RedirectManager.RedirectToCurrentPageWithStatus(
+                "No pudimos guardar los cambios. Intentá de nuevo.", HttpContext);
+            return;
+        }
+
+        await AppEvents.LogAsync(
+            module: EventModules.AuthProfile,
+            action: EventActions.Updated,
+            message: "Profile updated.",
+            userId: _user.Id,
+            userEmail: _user.Email);
+
+        // Refresh the auth cookie so the new name shows up in the UI immediately.
+        await SignInManager.RefreshSignInAsync(_user);
+
+        RedirectManager.RedirectToCurrentPageWithStatus("Perfil actualizado.", HttpContext);
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "El nombre es requerido.")]
+        [StringLength(120, MinimumLength = 2, ErrorMessage = "Debe tener entre {2} y {1} caracteres.")]
+        public string FullName { get; set; } = "";
+
+        [Required, StringLength(3, MinimumLength = 3, ErrorMessage = "Código ISO de 3 letras.")]
+        public string PreferredCurrency { get; set; } = "USD";
+    }
+}
