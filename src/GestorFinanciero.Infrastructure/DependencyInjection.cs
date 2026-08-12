@@ -61,11 +61,19 @@ public static class DependencyInjection
             {
                 options.User.RequireUniqueEmail = true;
                 options.SignIn.RequireConfirmedEmail = true; // requires confirmed email to log in
+
                 options.Password.RequireDigit = true;
                 options.Password.RequireLowercase = true;
                 options.Password.RequireUppercase = false;
                 options.Password.RequireNonAlphanumeric = false;
                 options.Password.RequiredLength = 8;
+
+                // Lockout — pairs with the per-IP HTTP rate limiter in Program.cs.
+                // The limiter caps *how fast* an attacker can try; lockout caps the
+                // *total* attempts per account within the window.
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AppDbContext>()
@@ -83,6 +91,8 @@ public static class DependencyInjection
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<ITransactionService, TransactionService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IBudgetService, BudgetService>();
+        services.AddScoped<IDebtService, DebtService>();
         services.AddScoped<IAppEventLogger, AppEventLogger>();
 
         // Email transport (SMTP via MailKit).

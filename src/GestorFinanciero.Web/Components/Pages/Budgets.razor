@@ -1,31 +1,300 @@
 @page "/budgets"
 @attribute [Authorize]
 
+@using System.Globalization
+@using GestorFinanciero.Application.DTOs
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Enums
+
+@inject IBudgetService BudgetService
+@inject IAppEventLogger AppEvents
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
 <PageTitle>Presupuestos — Gestor Financiero</PageTitle>
 
 <MudStack Spacing="6">
-    <div>
-        <MudText Typo="Typo.h4">Presupuestos</MudText>
-        <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
-            Planificá cada mes y compará estimado vs. real.
-        </MudText>
-    </div>
+    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <div>
+            <MudText Typo="Typo.h4">Presupuestos</MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                Planificá cada mes y compará estimado vs. real.
+            </MudText>
+        </div>
+        <MudStack Row Spacing="1">
+            <MudTooltip Text="Mes anterior">
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                               OnClick="PrevMonth"
+                               Disabled="loading" />
+            </MudTooltip>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       Style="min-width:180px"
+                       OnClick="GoToToday">
+                @MonthLabel(_year, _month)
+            </MudButton>
+            <MudTooltip Text="Mes siguiente">
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                               OnClick="NextMonth"
+                               Disabled="loading" />
+            </MudTooltip>
+        </MudStack>
+    </MudStack>
 
-    <MudPaper Elevation="0" Class="gf-empty pa-12 text-center">
-        <MudIcon Icon="@Icons.Material.Filled.PieChart"
-                 Size="Size.Large"
-                 Color="Color.Primary"
-                 Class="mb-4" />
-        <MudText Typo="Typo.h5" Class="mb-2">Muy pronto</MudText>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" Style="max-width:500px;margin:0 auto">
-            Vas a poder armar un presupuesto por mes, asignar un tope por categoría
-            y ver en tiempo real cuánto llevás gastado del estimado.
-        </MudText>
-        <MudButton Variant="Variant.Outlined"
-                   Color="Color.Primary"
-                   Href="transactions"
-                   StartIcon="@Icons.Material.Filled.SwapVert">
-            Mientras tanto, cargá tus transacciones
-        </MudButton>
-    </MudPaper>
+    @if (loading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_budget is null)
+    {
+        <MudText>Cargando…</MudText>
+    }
+    else
+    {
+        <!-- Resumen del mes -->
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Elevation="0" Class="gf-stat gf-stat-balance">
+                    <MudText Typo="Typo.overline">Estimado total</MudText>
+                    <MudText Typo="Typo.h4">@Format(_budget.TotalEstimated)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Suma de todas las categorías</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Elevation="0" Class="gf-stat gf-stat-expense">
+                    <MudText Typo="Typo.overline">Real (hasta ahora)</MudText>
+                    <MudText Typo="Typo.h4">@Format(_budget.TotalActual)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Transacciones del mes</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Elevation="0" Class="gf-stat gf-stat-income">
+                    <MudText Typo="Typo.overline">Diferencia</MudText>
+                    <MudText Typo="Typo.h4"
+                             Style="@($"color: var(--mud-palette-{(_budget.TotalEstimated - _budget.TotalActual >= 0 ? "success" : "error")})")">
+                        @Format(_budget.TotalEstimated - _budget.TotalActual)
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @((_budget.TotalEstimated - _budget.TotalActual) >= 0 ? "Bajo presupuesto" : "Sobre presupuesto")
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Grid de categorías -->
+        <MudPaper Elevation="0" Class="gf-panel">
+            <MudTable Items="_edits"
+                      Hover="true"
+                      Breakpoint="Breakpoint.Sm"
+                      Class="gf-table">
+                <NoRecordsContent>
+                    <MudText Class="pa-6 text-center mud-text-secondary">
+                        Todavía no tenés categorías. Creá algunas en /categories para armar tu presupuesto.
+                    </MudText>
+                </NoRecordsContent>
+                <HeaderContent>
+                    <MudTh Style="width:40px"></MudTh>
+                    <MudTh>Categoría</MudTh>
+                    <MudTh>Tipo</MudTh>
+                    <MudTh Style="width:180px" Class="text-right">Estimado</MudTh>
+                    <MudTh Style="width:160px" Class="text-right">Real</MudTh>
+                    <MudTh Style="width:200px">Progreso</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <div class="cat-dot" style="@($"background:{context.Item.CategoryColor}")"></div>
+                    </MudTd>
+                    <MudTd>
+                        <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Item.CategoryName</MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorFor(context.Item.CategoryType)">
+                            @TypeLabel(context.Item.CategoryType)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd Class="text-right">
+                        <MudNumericField T="decimal"
+                                         @bind-Value="context.EstimatedAmount"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Culture="@CultureInfo.InvariantCulture"
+                                         Format="N2"
+                                         Min="0"
+                                         Step="10M"
+                                         Immediate="true"
+                                         HideSpinButtons="true"
+                                         Style="max-width:160px" />
+                    </MudTd>
+                    <MudTd Class="text-right">
+                        <MudText Typo="Typo.body2"
+                                 Class="font-weight-bold"
+                                 Style="@($"color: var(--mud-palette-{(context.Item.OverBudget ? "error" : "text-primary")})")">
+                            @Format(context.Item.ActualAmount)
+                        </MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudProgressLinear Value="@Math.Min((double)context.Item.PercentUsed, 100)"
+                                           Color="@(context.Item.OverBudget ? Color.Error : Color.Primary)"
+                                           Rounded="true" Size="Size.Small" />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1">
+                            @context.Item.PercentUsed.ToString("N0")%
+                            @if (context.Item.OverBudget)
+                            {
+                                <span style="color:var(--mud-palette-error)"> · +@Format(context.Item.ActualAmount - context.Item.EstimatedAmount) sobre</span>
+                            }
+                        </MudText>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+
+        <MudStack Row Justify="Justify.FlexEnd" Spacing="2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Delete"
+                       OnClick="DeleteAsync"
+                       Disabled="@(saving || !HasAnyEstimate)">
+                Borrar presupuesto del mes
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="SaveAsync"
+                       Disabled="@saving">
+                @(saving ? "Guardando…" : "Guardar cambios")
+            </MudButton>
+        </MudStack>
+    }
 </MudStack>
+
+@code {
+    private BudgetDto? _budget;
+    private List<BudgetItemEdit> _edits = new();
+    private bool loading;
+    private bool saving;
+
+    private int _year  = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        _budget = await BudgetService.GetForMonthAsync(_year, _month);
+        _edits = _budget.Items
+            .Select(i => new BudgetItemEdit { Item = i, EstimatedAmount = i.EstimatedAmount })
+            .ToList();
+        loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            var payload = _edits.Select(e => new BudgetEstimateUpsertDto
+            {
+                CategoryId = e.Item.CategoryId,
+                EstimatedAmount = e.EstimatedAmount,
+            });
+
+            _budget = await BudgetService.SaveEstimatesAsync(_year, _month, payload);
+            _edits = _budget.Items
+                .Select(i => new BudgetItemEdit { Item = i, EstimatedAmount = i.EstimatedAmount })
+                .ToList();
+
+            Snackbar.Add("Presupuesto guardado.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Budgets", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Borrar presupuesto",
+            Message = $"¿Seguro que querés borrar el presupuesto de {MonthLabel(_year, _month)}? Las transacciones no se ven afectadas.",
+            YesText = "Borrar",
+            CancelText = "Cancelar",
+        });
+
+        if (confirmed != true) return;
+
+        try
+        {
+            await BudgetService.DeleteAsync(_year, _month);
+            Snackbar.Add("Presupuesto borrado.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Budgets", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
+        }
+    }
+
+    private async Task PrevMonth()
+    {
+        var d = new DateTime(_year, _month, 1).AddMonths(-1);
+        _year = d.Year; _month = d.Month;
+        await LoadAsync();
+    }
+
+    private async Task NextMonth()
+    {
+        var d = new DateTime(_year, _month, 1).AddMonths(1);
+        _year = d.Year; _month = d.Month;
+        await LoadAsync();
+    }
+
+    private async Task GoToToday()
+    {
+        _year = DateTime.UtcNow.Year;
+        _month = DateTime.UtcNow.Month;
+        await LoadAsync();
+    }
+
+    private bool HasAnyEstimate => _edits.Any(e => e.EstimatedAmount > 0);
+
+    private string Format(decimal amount) => $"{(_budget?.Currency ?? "USD")} {amount.ToString("N2", CultureInfo.InvariantCulture)}";
+
+    private static string MonthLabel(int year, int month) =>
+        CultureInfo.GetCultureInfo("es-ES").DateTimeFormat.GetMonthName(month).ToUpperInvariant()[0]
+        + CultureInfo.GetCultureInfo("es-ES").DateTimeFormat.GetMonthName(month)[1..]
+        + " " + year;
+
+    private static string TypeLabel(CategoryType t) => t switch
+    {
+        CategoryType.Income          => "Ingreso",
+        CategoryType.Savings         => "Ahorro",
+        CategoryType.FixedExpense    => "Gasto fijo",
+        CategoryType.VariableExpense => "Gasto variable",
+        CategoryType.Debt            => "Deuda",
+        _                            => t.ToString(),
+    };
+
+    private static Color ColorFor(CategoryType t) => t switch
+    {
+        CategoryType.Income          => Color.Success,
+        CategoryType.Savings         => Color.Info,
+        CategoryType.FixedExpense    => Color.Error,
+        CategoryType.VariableExpense => Color.Warning,
+        CategoryType.Debt            => Color.Secondary,
+        _                            => Color.Default,
+    };
+
+    private sealed class BudgetItemEdit
+    {
+        public BudgetItemDto Item { get; set; } = default!;
+        public decimal EstimatedAmount { get; set; }
+    }
+}

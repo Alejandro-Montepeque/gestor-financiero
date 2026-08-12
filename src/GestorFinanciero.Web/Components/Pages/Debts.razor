@@ -1,31 +1,517 @@
 @page "/debts"
 @attribute [Authorize]
 
+@using System.ComponentModel.DataAnnotations
+@using System.Globalization
+@using GestorFinanciero.Application.DTOs
+@using GestorFinanciero.Application.Interfaces
+
+@inject IDebtService DebtService
+@inject IAppEventLogger AppEvents
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
 <PageTitle>Deudas — Gestor Financiero</PageTitle>
 
 <MudStack Spacing="6">
-    <div>
-        <MudText Typo="Typo.h4">Deudas</MudText>
-        <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
-            Seguí el capital, el interés y el saldo restante de cada deuda.
-        </MudText>
-    </div>
-
-    <MudPaper Elevation="0" Class="gf-empty pa-12 text-center">
-        <MudIcon Icon="@Icons.Material.Filled.CreditCard"
-                 Size="Size.Large"
-                 Color="Color.Warning"
-                 Class="mb-4" />
-        <MudText Typo="Typo.h5" Class="mb-2">Muy pronto</MudText>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" Style="max-width:500px;margin:0 auto">
-            Vas a poder registrar tarjetas, préstamos y créditos, aplicar pagos
-            con desglose de capital vs. interés, y ver la amortización mes a mes.
-        </MudText>
-        <MudButton Variant="Variant.Outlined"
+    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <div>
+            <MudText Typo="Typo.h4">Deudas</MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                Registrá tus deudas, pagos y seguí el saldo restante.
+            </MudText>
+        </div>
+        <MudButton StartIcon="@Icons.Material.Filled.Add"
+                   Variant="Variant.Filled"
                    Color="Color.Primary"
-                   Href="categories"
-                   StartIcon="@Icons.Material.Filled.Category">
-            Mientras tanto, revisá tus categorías
+                   OnClick="StartCreate">
+            Nueva deuda
         </MudButton>
+    </MudStack>
+
+    <MudPaper Elevation="0" Class="gf-panel">
+        <MudTable Items="debts"
+                  Loading="loading"
+                  LoadingProgressColor="Color.Primary"
+                  Hover="true"
+                  Breakpoint="Breakpoint.Sm"
+                  Class="gf-table">
+            <NoRecordsContent>
+                <MudText Class="pa-6 text-center mud-text-secondary">
+                    Aún no registraste deudas. Creá la primera con "Nueva deuda".
+                </MudText>
+            </NoRecordsContent>
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh Class="text-right">Saldo actual</MudTh>
+                <MudTh Class="text-right">Tasa</MudTh>
+                <MudTh Class="text-right">Pago mínimo</MudTh>
+                <MudTh Class="text-right">Pagos</MudTh>
+                <MudTh Style="width:200px" Class="text-right">Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Name</MudText>
+                    @if (!string.IsNullOrWhiteSpace(context.Notes))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Notes</MudText>
+                    }
+                </MudTd>
+                <MudTd Class="text-right">
+                    <MudText Typo="Typo.body2" Class="font-weight-bold">
+                        @Format(context.CurrentBalance, context.Currency)
+                    </MudText>
+                </MudTd>
+                <MudTd Class="text-right">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @(context.InterestRate is null ? "—" : $"{context.InterestRate:N2}%")
+                    </MudText>
+                </MudTd>
+                <MudTd Class="text-right">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @(context.MinimumPayment is null ? "—" : Format(context.MinimumPayment.Value, context.Currency))
+                    </MudText>
+                </MudTd>
+                <MudTd Class="text-right">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                        @context.PaymentCount
+                    </MudChip>
+                </MudTd>
+                <MudTd Class="text-right">
+                    <MudTooltip Text="Aplicar pago">
+                        <MudIconButton Icon="@Icons.Material.Filled.Payments"
+                                       Size="Size.Small"
+                                       Color="Color.Success"
+                                       OnClick="() => StartPayment(context)"
+                                       Disabled="@(context.CurrentBalance == 0)" />
+                    </MudTooltip>
+                    <MudTooltip Text="Ver historial">
+                        <MudIconButton Icon="@Icons.Material.Filled.History"
+                                       Size="Size.Small"
+                                       OnClick="() => OpenHistory(context)" />
+                    </MudTooltip>
+                    <MudTooltip Text="Editar">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Size="Size.Small"
+                                       OnClick="() => StartEdit(context)" />
+                    </MudTooltip>
+                    <MudTooltip Text="Borrar">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Size="Size.Small"
+                                       Color="Color.Error"
+                                       OnClick="() => DeleteAsync(context)" />
+                    </MudTooltip>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
     </MudPaper>
 </MudStack>
+
+<!-- Dialog: crear/editar deuda -->
+<MudDialog @bind-Visible="editDialogOpen" Options="@_dialogOptions">
+    <TitleContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(editing?.Id is null ? Icons.Material.Filled.Add : Icons.Material.Filled.Edit)"
+                     Color="Color.Primary" />
+            <MudText Typo="Typo.h6">
+                @(editing?.Id is null ? "Nueva deuda" : "Editar deuda")
+            </MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (editing is not null)
+        {
+            <EditForm Model="editing" OnValidSubmit="SaveDebt" id="debt-form">
+                <DataAnnotationsValidator />
+                <MudStack Spacing="4">
+                    <MudTextField T="string"
+                                  Label="Nombre"
+                                  @bind-Value="editing.Name"
+                                  For="() => editing.Name"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="Tarjeta, préstamo, hipoteca, deuda personal…"
+                                  HelperText="Cualquier tipo de deuda: tarjeta, banco, familiar, préstamo estudiantil, etc."
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.AccountBalance" />
+
+                    <MudStack Row Spacing="3">
+                        <MudNumericField T="decimal"
+                                         Label="Saldo actual"
+                                         @bind-Value="editing.CurrentBalance"
+                                         For="() => editing.CurrentBalance"
+                                         Variant="Variant.Outlined"
+                                         Culture="@CultureInfo.InvariantCulture"
+                                         Format="N2"
+                                         Min="0"
+                                         Step="10M"
+                                         Adornment="Adornment.Start"
+                                         AdornmentIcon="@Icons.Material.Filled.AttachMoney" />
+
+                        <MudTextField T="string"
+                                      Label="Moneda"
+                                      @bind-Value="editing.Currency"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="3"
+                                      Style="max-width:120px" />
+                    </MudStack>
+
+                    <MudStack Row Spacing="3">
+                        <MudNumericField T="decimal?"
+                                         Label="Tasa anual (%)"
+                                         @bind-Value="editing.InterestRate"
+                                         Variant="Variant.Outlined"
+                                         Culture="@CultureInfo.InvariantCulture"
+                                         Format="N2"
+                                         Min="0" Max="100"
+                                         Step="0.25M"
+                                         Clearable="true"
+                                         HelperText="Opcional. Si la ponés, el interés se calcula automático." />
+
+                        <MudNumericField T="decimal?"
+                                         Label="Pago mínimo"
+                                         @bind-Value="editing.MinimumPayment"
+                                         Variant="Variant.Outlined"
+                                         Culture="@CultureInfo.InvariantCulture"
+                                         Format="N2"
+                                         Min="0"
+                                         Step="10M"
+                                         Clearable="true"
+                                         HelperText="Opcional." />
+                    </MudStack>
+
+                    <MudTextField T="string"
+                                  Label="Notas"
+                                  @bind-Value="editing.Notes"
+                                  Variant="Variant.Outlined"
+                                  Lines="2" />
+                </MudStack>
+            </EditForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => editDialogOpen = false">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="SaveDebt"
+                   Disabled="@saving"
+                   StartIcon="@Icons.Material.Filled.Save">
+            @(saving ? "Guardando…" : "Guardar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Dialog: aplicar pago -->
+<MudDialog @bind-Visible="paymentDialogOpen" Options="@_dialogOptions">
+    <TitleContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
+            <MudText Typo="Typo.h6">Aplicar pago — @payingDebt?.Name</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (paymentForm is not null && payingDebt is not null)
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Text" Dense="true" Class="mb-4">
+                Saldo actual: <strong>@Format(payingDebt.CurrentBalance, payingDebt.Currency)</strong>
+                @if (payingDebt.InterestRate is > 0m)
+                {
+                    <br /><span>El interés se calcula automáticamente en base a la tasa anual (@payingDebt.InterestRate.Value.ToString("N2")%).</span>
+                }
+            </MudAlert>
+
+            <EditForm Model="paymentForm" OnValidSubmit="ApplyPayment" id="payment-form">
+                <DataAnnotationsValidator />
+                <MudStack Spacing="4">
+                    <MudDatePicker Label="Fecha"
+                                   Date="_paymentDate"
+                                   DateChanged="OnPaymentDateChanged"
+                                   Variant="Variant.Outlined"
+                                   Adornment="Adornment.Start"
+                                   AdornmentIcon="@Icons.Material.Filled.CalendarToday" />
+
+                    <MudNumericField T="decimal"
+                                     Label="Monto del pago"
+                                     @bind-Value="paymentForm.Amount"
+                                     For="() => paymentForm.Amount"
+                                     Variant="Variant.Outlined"
+                                     Culture="@CultureInfo.InvariantCulture"
+                                     Format="N2"
+                                     Min="0.01M"
+                                     Step="10M"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.AttachMoney" />
+                </MudStack>
+            </EditForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => paymentDialogOpen = false">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Success"
+                   OnClick="ApplyPayment"
+                   Disabled="@saving"
+                   StartIcon="@Icons.Material.Filled.CheckCircle">
+            @(saving ? "Aplicando…" : "Aplicar pago")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Dialog: historial de pagos -->
+<MudDialog @bind-Visible="historyDialogOpen" Options="@_historyOptions">
+    <TitleContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Historial — @historyDetail?.Debt.Name</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (historyDetail is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (historyDetail.Payments.Count == 0)
+        {
+            <MudText Class="pa-4 text-center mud-text-secondary">
+                Esta deuda todavía no tiene pagos aplicados.
+            </MudText>
+        }
+        else
+        {
+            <MudTable Items="historyDetail.Payments" Hover="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Fecha</MudTh>
+                    <MudTh Class="text-right">Total</MudTh>
+                    <MudTh Class="text-right">Interés</MudTh>
+                    <MudTh Class="text-right">Capital</MudTh>
+                    <MudTh Class="text-right">Saldo</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Date.ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-ES"))</MudTd>
+                    <MudTd Class="text-right"><strong>@Format(context.TotalPaid, context.Currency)</strong></MudTd>
+                    <MudTd Class="text-right" Style="color:var(--mud-palette-error)">@Format(context.InterestAmount, context.Currency)</MudTd>
+                    <MudTd Class="text-right" Style="color:var(--mud-palette-success)">@Format(context.PrincipalAmount, context.Currency)</MudTd>
+                    <MudTd Class="text-right">@(context.RemainingBalance is null ? "—" : Format(context.RemainingBalance.Value, context.Currency))</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => historyDialogOpen = false">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<DebtDto> debts = new();
+    private bool loading = true;
+    private bool saving;
+
+    // Edit / create debt
+    private bool editDialogOpen;
+    private DebtFormModel? editing;
+
+    // Apply payment
+    private bool paymentDialogOpen;
+    private DebtDto? payingDebt;
+    private PaymentFormModel? paymentForm;
+    private DateTime? _paymentDate = DateTime.Today;
+
+    // History
+    private bool historyDialogOpen;
+    private DebtDetailDto? historyDetail;
+
+    private readonly DialogOptions _dialogOptions = new()
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    private readonly DialogOptions _historyOptions = new()
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Medium,
+        FullWidth = true,
+    };
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        loading = true;
+        debts = (await DebtService.GetAllAsync()).ToList();
+        loading = false;
+    }
+
+    // ── Create / Edit ─────────────────────────────
+    private void StartCreate()
+    {
+        editing = new DebtFormModel { Currency = "USD" };
+        editDialogOpen = true;
+    }
+
+    private void StartEdit(DebtDto d)
+    {
+        editing = new DebtFormModel
+        {
+            Id = d.Id,
+            Name = d.Name,
+            CurrentBalance = d.CurrentBalance,
+            Currency = d.Currency,
+            InterestRate = d.InterestRate,
+            MinimumPayment = d.MinimumPayment,
+            Notes = d.Notes,
+        };
+        editDialogOpen = true;
+    }
+
+    private async Task SaveDebt()
+    {
+        if (editing is null) return;
+
+        saving = true;
+        try
+        {
+            var dto = new DebtUpsertDto
+            {
+                Id = editing.Id,
+                Name = editing.Name,
+                CurrentBalance = editing.CurrentBalance,
+                Currency = editing.Currency,
+                InterestRate = editing.InterestRate,
+                MinimumPayment = editing.MinimumPayment,
+                Notes = editing.Notes,
+            };
+
+            if (dto.Id is null)
+                await DebtService.CreateAsync(dto);
+            else
+                await DebtService.UpdateAsync(dto);
+
+            Snackbar.Add(dto.Id is null ? "Deuda creada." : "Deuda actualizada.", Severity.Success);
+            editDialogOpen = false;
+            editing = null;
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Debts", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    // ── Apply payment ─────────────────────────────
+    private void StartPayment(DebtDto d)
+    {
+        payingDebt = d;
+        paymentForm = new PaymentFormModel
+        {
+            Amount = d.MinimumPayment ?? Math.Min(d.CurrentBalance, 100m),
+        };
+        _paymentDate = DateTime.Today;
+        paymentDialogOpen = true;
+    }
+
+    private void OnPaymentDateChanged(DateTime? date) => _paymentDate = date;
+
+    private async Task ApplyPayment()
+    {
+        if (payingDebt is null || paymentForm is null) return;
+
+        saving = true;
+        try
+        {
+            await DebtService.AddPaymentAsync(new DebtPaymentCreateDto
+            {
+                DebtId = payingDebt.Id,
+                Date = DateOnly.FromDateTime(_paymentDate ?? DateTime.Today),
+                Amount = paymentForm.Amount,
+            });
+
+            Snackbar.Add("Pago aplicado.", Severity.Success);
+            paymentDialogOpen = false;
+            payingDebt = null;
+            paymentForm = null;
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Debts", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    // ── History ───────────────────────────────────
+    private async Task OpenHistory(DebtDto d)
+    {
+        historyDetail = null;
+        historyDialogOpen = true;
+        historyDetail = await DebtService.GetByIdAsync(d.Id);
+    }
+
+    // ── Delete ────────────────────────────────────
+    private async Task DeleteAsync(DebtDto d)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Borrar deuda",
+            Message = $"¿Seguro que querés borrar \"{d.Name}\"? Se pierden todos los pagos aplicados.",
+            YesText = "Borrar",
+            CancelText = "Cancelar",
+        });
+
+        if (confirmed != true) return;
+
+        try
+        {
+            await DebtService.DeleteAsync(d.Id);
+            Snackbar.Add("Deuda borrada.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Debts", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
+        }
+    }
+
+    private static string Format(decimal amount, string currency)
+        => $"{currency} {amount.ToString("N2", CultureInfo.InvariantCulture)}";
+
+    private sealed class DebtFormModel
+    {
+        public Guid? Id { get; set; }
+
+        [Required(ErrorMessage = "El nombre es requerido.")]
+        [StringLength(120, MinimumLength = 2)]
+        public string Name { get; set; } = "";
+
+        [Range(0, double.MaxValue, ErrorMessage = "El saldo no puede ser negativo.")]
+        public decimal CurrentBalance { get; set; }
+
+        [Required, StringLength(3, MinimumLength = 3)]
+        public string Currency { get; set; } = "USD";
+
+        [Range(0, 100, ErrorMessage = "La tasa debe estar entre 0 y 100%.")]
+        public decimal? InterestRate { get; set; }
+
+        [Range(0, double.MaxValue)]
+        public decimal? MinimumPayment { get; set; }
+
+        [StringLength(1000)]
+        public string? Notes { get; set; }
+    }
+
+    private sealed class PaymentFormModel
+    {
+        [Range(0.01, double.MaxValue, ErrorMessage = "El monto debe ser mayor a 0.")]
+        public decimal Amount { get; set; }
+    }
+}
