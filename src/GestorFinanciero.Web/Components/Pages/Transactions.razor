@@ -1,5 +1,4 @@
 @page "/transactions"
-@rendermode InteractiveServer
 @attribute [Authorize]
 
 @using System.ComponentModel.DataAnnotations
@@ -10,154 +9,236 @@
 
 @inject ITransactionService TransactionService
 @inject ICategoryService CategoryService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
-<PageTitle>Transacciones</PageTitle>
+<PageTitle>Transacciones — Gestor Financiero</PageTitle>
 
-<div class="page-header">
-    <h1>Transacciones</h1>
-    <button class="btn btn-primary" @onclick="StartCreate" disabled="@(categoryList.Count == 0)">
-        + Nueva transacción
-    </button>
-</div>
+<MudStack Spacing="6">
+    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <div>
+            <MudText Typo="Typo.h4">Transacciones</MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                Cada ingreso y gasto en un solo lugar.
+            </MudText>
+        </div>
+        <MudButton StartIcon="@Icons.Material.Filled.Add"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="StartCreate"
+                   Disabled="@(categoryList.Count == 0)">
+            Nueva transacción
+        </MudButton>
+    </MudStack>
 
-<div class="filters">
-    <div>
-        <label>Desde</label>
-        <input type="date" class="form-control" value="@FormatFilterDate(filter.From)" @onchange="OnFromChanged" />
-    </div>
-    <div>
-        <label>Hasta</label>
-        <input type="date" class="form-control" value="@FormatFilterDate(filter.To)" @onchange="OnToChanged" />
-    </div>
-    <div>
-        <label>Categoría</label>
-        <select class="form-control" @onchange="OnCategoryFilterChanged">
-            <option value="">Todas</option>
-            @foreach (var cat in categoryList)
-            {
-                <option value="@cat.Id" selected="@(filter.CategoryId == cat.Id)">@cat.Name</option>
-            }
-        </select>
-    </div>
-    <div class="d-flex align-items-end">
-        <button class="btn btn-outline-secondary" @onclick="ClearFilters">Limpiar</button>
-    </div>
-</div>
-
-@if (loading)
-{
-    <p>Cargando…</p>
-}
-else if (transactions.Count == 0)
-{
-    <p>Sin transacciones para el filtro actual.</p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Categoría</th>
-                <th>Descripción</th>
-                <th class="text-end">Monto</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var tx in transactions)
-            {
-                <tr>
-                    <td>@tx.Date.ToString("yyyy-MM-dd")</td>
-                    <td>
-                        <span class="cat-swatch" style="@($"background:{tx.CategoryColor}")"></span>
-                        @tx.CategoryName
-                    </td>
-                    <td>@(tx.Description ?? "—")</td>
-                    <td class="text-end @(IsIncome(tx.CategoryType) ? "text-success" : "text-danger")">
-                        @(IsIncome(tx.CategoryType) ? "+" : "-") @tx.Amount.ToString("N2", CultureInfo.InvariantCulture) @tx.Currency
-                    </td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEdit(tx)">Editar</button>
-                        <button class="btn btn-sm btn-outline-danger ms-2" @onclick="() => Delete(tx.Id)">Borrar</button>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-
-@if (editing is not null)
-{
-    <div class="modal-backdrop-fake" @onclick="CancelEdit"></div>
-    <div class="modal-fake">
-        <h2>@(editing.Id is null ? "Nueva transacción" : "Editar transacción")</h2>
-
-        <EditForm Model="editing" OnValidSubmit="SaveEdit">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="form-errors" />
-
-            <div class="field">
-                <label>Categoría</label>
-                <InputSelect @bind-Value="editing.CategoryId" class="form-control">
-                    <option value="">-- Elegí una categoría --</option>
+    <MudPaper Elevation="0" Class="gf-panel pa-4">
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="4" md="3">
+                <MudDatePicker Label="Desde"
+                               Date="_fromDate"
+                               DateChanged="OnFromChanged"
+                               Variant="Variant.Outlined"
+                               Adornment="Adornment.Start"
+                               AdornmentIcon="@Icons.Material.Filled.CalendarToday" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="3">
+                <MudDatePicker Label="Hasta"
+                               Date="_toDate"
+                               DateChanged="OnToChanged"
+                               Variant="Variant.Outlined"
+                               Adornment="Adornment.Start"
+                               AdornmentIcon="@Icons.Material.Filled.EventBusy" />
+            </MudItem>
+            <MudItem xs="12" sm="4" md="4">
+                <MudSelect T="Guid?"
+                           Label="Categoría"
+                           Value="filter.CategoryId"
+                           ValueChanged="OnCategoryFilterChanged"
+                           Variant="Variant.Outlined"
+                           Clearable="true"
+                           Adornment="Adornment.Start"
+                           AdornmentIcon="@Icons.Material.Filled.Category">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">Todas</MudSelectItem>
                     @foreach (var cat in categoryList)
                     {
-                        <option value="@cat.Id">@cat.Name (@TypeLabel(cat.Type))</option>
+                        <MudSelectItem T="Guid?" Value="@((Guid?)cat.Id)">@cat.Name</MudSelectItem>
                     }
-                </InputSelect>
-                <ValidationMessage For="() => editing.CategoryId" class="field-error" />
-            </div>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2" Class="d-flex align-items-end">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.FilterAltOff"
+                           OnClick="ClearFilters"
+                           FullWidth="true">
+                    Limpiar
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
 
-            <div class="field">
-                <label>Fecha</label>
-                <InputDate @bind-Value="editing.Date" class="form-control" />
-            </div>
+    <MudPaper Elevation="0" Class="gf-panel">
+        <MudTable Items="transactions"
+                  Loading="loading"
+                  LoadingProgressColor="Color.Primary"
+                  Hover="true"
+                  Breakpoint="Breakpoint.Sm"
+                  Class="gf-table">
+            <NoRecordsContent>
+                <MudText Class="pa-6 text-center mud-text-secondary">
+                    Sin transacciones para el filtro actual.
+                </MudText>
+            </NoRecordsContent>
+            <HeaderContent>
+                <MudTh Style="width:120px">Fecha</MudTh>
+                <MudTh>Categoría</MudTh>
+                <MudTh>Descripción</MudTh>
+                <MudTh Class="text-right">Monto</MudTh>
+                <MudTh Style="width:120px" Class="text-right">Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @context.Date.ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-ES"))
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <div class="cat-dot" style="@($"background:{context.CategoryColor}")"></div>
+                        <MudText Typo="Typo.body2">@context.CategoryName</MudText>
+                    </MudStack>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2">@(context.Description ?? "—")</MudText>
+                </MudTd>
+                <MudTd Class="text-right">
+                    <MudText Typo="Typo.body2"
+                             Class="font-weight-bold"
+                             Style="@($"color: var(--mud-palette-{(IsIncome(context.CategoryType) ? "success" : "error")})")">
+                        @(IsIncome(context.CategoryType) ? "+" : "−")@context.Amount.ToString("N2", CultureInfo.InvariantCulture) @context.Currency
+                    </MudText>
+                </MudTd>
+                <MudTd Class="text-right">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   OnClick="() => StartEdit(context)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   OnClick="() => DeleteAsync(context)" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+</MudStack>
 
-            <div class="field">
-                <label>Monto</label>
-                <InputNumber @bind-Value="editing.Amount" class="form-control" step="0.01" />
-                <ValidationMessage For="() => editing.Amount" class="field-error" />
-            </div>
+<MudDialog @bind-Visible="dialogOpen" Options="@_dialogOptions">
+    <TitleContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(editing?.Id is null ? Icons.Material.Filled.Add : Icons.Material.Filled.Edit)"
+                     Color="Color.Primary" />
+            <MudText Typo="Typo.h6">
+                @(editing?.Id is null ? "Nueva transacción" : "Editar transacción")
+            </MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (editing is not null)
+        {
+            <EditForm Model="editing" OnValidSubmit="SaveEdit" id="transaction-form">
+                <DataAnnotationsValidator />
+                <MudStack Spacing="4">
+                    <MudSelect T="Guid"
+                               Label="Categoría"
+                               @bind-Value="editing.CategoryId"
+                               For="() => editing.CategoryId"
+                               Variant="Variant.Outlined"
+                               Adornment="Adornment.Start"
+                               AdornmentIcon="@Icons.Material.Filled.Category">
+                        @foreach (var cat in categoryList)
+                        {
+                            <MudSelectItem T="Guid" Value="@cat.Id">
+                                @cat.Name (@TypeLabel(cat.Type))
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
 
-            <div class="field">
-                <label>Moneda</label>
-                <InputText @bind-Value="editing.Currency" class="form-control" maxlength="3" />
-            </div>
+                    <MudStack Row Spacing="3">
+                        <MudNumericField T="decimal"
+                                         Label="Monto"
+                                         @bind-Value="editing.Amount"
+                                         For="() => editing.Amount"
+                                         Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start"
+                                         AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                         Culture="@CultureInfo.InvariantCulture"
+                                         Step="0.01M"
+                                         Format="N2" />
 
-            <div class="field">
-                <label>Descripción</label>
-                <InputText @bind-Value="editing.Description" class="form-control" placeholder="Ej: Netflix" />
-            </div>
+                        <MudTextField T="string"
+                                      Label="Moneda"
+                                      @bind-Value="editing.Currency"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="3"
+                                      Style="max-width:120px" />
+                    </MudStack>
 
-            <div class="field">
-                <label>Notas (opcional)</label>
-                <InputTextArea @bind-Value="editing.Notes" class="form-control" rows="2" />
-            </div>
+                    <MudDatePicker Label="Fecha"
+                                   Date="_editingDate"
+                                   DateChanged="OnEditingDateChanged"
+                                   Variant="Variant.Outlined"
+                                   Adornment="Adornment.Start"
+                                   AdornmentIcon="@Icons.Material.Filled.CalendarMonth" />
 
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger">@errorMessage</div>
-            }
+                    <MudTextField T="string"
+                                  Label="Descripción"
+                                  @bind-Value="editing.Description"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="Ej: Netflix, supermercado…"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Notes" />
 
-            <div class="modal-actions">
-                <button type="button" class="btn btn-outline-secondary" @onclick="CancelEdit">Cancelar</button>
-                <button type="submit" class="btn btn-primary" disabled="@saving">
-                    @(saving ? "Guardando…" : "Guardar")
-                </button>
-            </div>
-        </EditForm>
-    </div>
-}
+                    <MudTextField T="string"
+                                  Label="Notas (opcional)"
+                                  @bind-Value="editing.Notes"
+                                  Variant="Variant.Outlined"
+                                  Lines="2" />
+                </MudStack>
+            </EditForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CancelEdit">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="SaveEdit"
+                   Disabled="@saving"
+                   StartIcon="@Icons.Material.Filled.Save">
+            @(saving ? "Guardando…" : "Guardar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
 
 @code {
     private List<TransactionDto> transactions = new();
     private List<CategoryDto> categoryList = new();
     private bool loading = true;
     private TransactionFilter filter = new();
+
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private DateTime? _editingDate = DateTime.Today;
+
+    private bool dialogOpen;
     private TransactionFormModel? editing;
     private bool saving;
-    private string? errorMessage;
+
+    private readonly DialogOptions _dialogOptions = new()
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -172,20 +253,55 @@ else
         loading = false;
     }
 
+    private async Task OnFromChanged(DateTime? date)
+    {
+        _fromDate = date;
+        filter.From = date is null ? null : DateOnly.FromDateTime(date.Value);
+        await Reload();
+    }
+
+    private async Task OnToChanged(DateTime? date)
+    {
+        _toDate = date;
+        filter.To = date is null ? null : DateOnly.FromDateTime(date.Value);
+        await Reload();
+    }
+
+    private async Task OnCategoryFilterChanged(Guid? categoryId)
+    {
+        filter.CategoryId = categoryId;
+        await Reload();
+    }
+
+    private async Task ClearFilters()
+    {
+        _fromDate = null;
+        _toDate = null;
+        filter = new TransactionFilter();
+        await Reload();
+    }
+
+    private void OnEditingDateChanged(DateTime? date)
+    {
+        _editingDate = date;
+        if (editing is not null && date is not null)
+            editing.Date = DateOnly.FromDateTime(date.Value);
+    }
+
     private void StartCreate()
     {
-        errorMessage = null;
         editing = new TransactionFormModel
         {
-            Date = DateOnly.FromDateTime(DateTime.UtcNow),
+            Date = DateOnly.FromDateTime(DateTime.Today),
             Currency = "USD",
             CategoryId = categoryList.FirstOrDefault()?.Id ?? Guid.Empty,
         };
+        _editingDate = DateTime.Today;
+        dialogOpen = true;
     }
 
     private void StartEdit(TransactionDto tx)
     {
-        errorMessage = null;
         editing = new TransactionFormModel
         {
             Id = tx.Id,
@@ -196,17 +312,21 @@ else
             Description = tx.Description,
             Notes = tx.Notes,
         };
+        _editingDate = tx.Date.ToDateTime(TimeOnly.MinValue);
+        dialogOpen = true;
     }
 
-    private void CancelEdit() => editing = null;
+    private void CancelEdit()
+    {
+        dialogOpen = false;
+        editing = null;
+    }
 
     private async Task SaveEdit()
     {
         if (editing is null) return;
 
         saving = true;
-        errorMessage = null;
-
         try
         {
             var dto = new TransactionUpsertDto
@@ -225,12 +345,14 @@ else
             else
                 await TransactionService.UpdateAsync(dto);
 
+            Snackbar.Add(dto.Id is null ? "Transacción creada." : "Transacción actualizada.", Severity.Success);
+            dialogOpen = false;
             editing = null;
             await Reload();
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
+            Snackbar.Add(ex.Message, Severity.Error);
         }
         finally
         {
@@ -238,48 +360,29 @@ else
         }
     }
 
-    private async Task Delete(Guid id)
+    private async Task DeleteAsync(TransactionDto tx)
     {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Borrar transacción",
+            Message = $"¿Seguro que querés borrar esta transacción de {tx.Amount:N2} {tx.Currency}?",
+            YesText = "Borrar",
+            CancelText = "Cancelar",
+        });
+
+        if (confirmed != true) return;
+
         try
         {
-            await TransactionService.DeleteAsync(id);
+            await TransactionService.DeleteAsync(tx.Id);
+            Snackbar.Add("Transacción borrada.", Severity.Success);
             await Reload();
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
+            Snackbar.Add(ex.Message, Severity.Error);
         }
     }
-
-    private async Task OnFromChanged(ChangeEventArgs e)
-    {
-        filter.From = ParseFilterDate(e.Value?.ToString());
-        await Reload();
-    }
-
-    private async Task OnToChanged(ChangeEventArgs e)
-    {
-        filter.To = ParseFilterDate(e.Value?.ToString());
-        await Reload();
-    }
-
-    private async Task OnCategoryFilterChanged(ChangeEventArgs e)
-    {
-        var raw = e.Value?.ToString();
-        filter.CategoryId = Guid.TryParse(raw, out var id) ? id : null;
-        await Reload();
-    }
-
-    private async Task ClearFilters()
-    {
-        filter = new TransactionFilter();
-        await Reload();
-    }
-
-    private static string FormatFilterDate(DateOnly? d) => d?.ToString("yyyy-MM-dd") ?? "";
-
-    private static DateOnly? ParseFilterDate(string? raw)
-        => DateOnly.TryParse(raw, out var d) ? d : null;
 
     private static bool IsIncome(CategoryType t) => t is CategoryType.Income or CategoryType.Savings;
 
@@ -306,7 +409,7 @@ else
         [Required, StringLength(3, MinimumLength = 3)]
         public string Currency { get; set; } = "USD";
 
-        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly Date { get; set; } = DateOnly.FromDateTime(DateTime.Today);
 
         [StringLength(255)]
         public string? Description { get; set; }

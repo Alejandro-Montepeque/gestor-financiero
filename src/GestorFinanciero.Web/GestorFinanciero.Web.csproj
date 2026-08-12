@@ -19,6 +19,9 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+
+    <!-- MudBlazor: Material Design component library for Blazor. -->
+    <PackageReference Include="MudBlazor" Version="9.8.0" />
   </ItemGroup>
 
 </Project>

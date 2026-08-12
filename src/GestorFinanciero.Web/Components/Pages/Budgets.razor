@@ -1,0 +1,31 @@
+@page "/budgets"
+@attribute [Authorize]
+
+<PageTitle>Presupuestos — Gestor Financiero</PageTitle>
+
+<MudStack Spacing="6">
+    <div>
+        <MudText Typo="Typo.h4">Presupuestos</MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+            Planificá cada mes y compará estimado vs. real.
+        </MudText>
+    </div>
+
+    <MudPaper Elevation="0" Class="gf-empty pa-12 text-center">
+        <MudIcon Icon="@Icons.Material.Filled.PieChart"
+                 Size="Size.Large"
+                 Color="Color.Primary"
+                 Class="mb-4" />
+        <MudText Typo="Typo.h5" Class="mb-2">Muy pronto</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" Style="max-width:500px;margin:0 auto">
+            Vas a poder armar un presupuesto por mes, asignar un tope por categoría
+            y ver en tiempo real cuánto llevás gastado del estimado.
+        </MudText>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   Href="transactions"
+                   StartIcon="@Icons.Material.Filled.SwapVert">
+            Mientras tanto, cargá tus transacciones
+        </MudButton>
+    </MudPaper>
+</MudStack>

@@ -1,14 +1,17 @@
 @page "/Account/Lockout"
+@layout AuthLayout
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
 
 <PageTitle>Cuenta bloqueada</PageTitle>
 
-<div class="auth-shell">
-    <div class="auth-card">
-        <h1>Cuenta bloqueada temporalmente</h1>
-        <p>
-            Por seguridad, tu cuenta se bloqueó tras varios intentos fallidos.
-            Esperá unos minutos y volvé a intentar.
-        </p>
-        <a href="Account/Login" class="btn btn-primary">Volver al login</a>
-    </div>
-</div>
+<MudPaper Elevation="4" Class="auth-card pa-8 text-center">
+    <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Warning" Size="Size.Large" Class="mb-3" />
+    <MudText Typo="Typo.h5" Class="mb-2">Cuenta bloqueada temporalmente</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">
+        Por seguridad, tu cuenta se bloqueó tras varios intentos fallidos.
+        Esperá unos minutos y volvé a intentar.
+    </MudText>
+    <MudButton Href="Account/Login" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login">
+        Volver al login
+    </MudButton>
+</MudPaper>

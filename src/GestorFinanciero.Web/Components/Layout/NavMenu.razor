@@ -1,42 +1,41 @@
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">Gestor Financiero</a>
-    </div>
-</div>
+@* Sidebar navigation — only rendered for authenticated users (see MainLayout).
+   No anon links since they're not needed here. *@
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<MudNavMenu Class="gf-navmenu pa-2">
+    <MudNavLink Href="/" Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Filled.Dashboard">
+        Panel
+    </MudNavLink>
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Inicio
-            </NavLink>
-        </div>
+    <MudDivider Class="my-2" />
 
-        <AuthorizeView>
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="transactions">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Transacciones
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="categories">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Categorías
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="budgets">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Presupuestos
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="debts">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Deudas
-                    </NavLink>
-                </div>
-            </Authorized>
-        </AuthorizeView>
-    </nav>
-</div>
+    <MudText Typo="Typo.overline" Class="pl-4 mud-text-secondary">
+        Movimientos
+    </MudText>
+
+    <MudNavLink Href="transactions"
+                Icon="@Icons.Material.Filled.SwapVert">
+        Transacciones
+    </MudNavLink>
+
+    <MudNavLink Href="categories"
+                Icon="@Icons.Material.Filled.Category">
+        Categorías
+    </MudNavLink>
+
+    <MudDivider Class="my-2" />
+
+    <MudText Typo="Typo.overline" Class="pl-4 mud-text-secondary">
+        Planeación
+    </MudText>
+
+    <MudNavLink Href="budgets"
+                Icon="@Icons.Material.Filled.PieChart">
+        Presupuestos
+    </MudNavLink>
+
+    <MudNavLink Href="debts"
+                Icon="@Icons.Material.Filled.CreditCard">
+        Deudas
+    </MudNavLink>
+</MudNavMenu>

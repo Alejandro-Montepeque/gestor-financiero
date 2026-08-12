@@ -1,35 +1,90 @@
 @inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@* Layout stays static SSR: Body is a RenderFragment and interactive layouts
+   can't accept those. Interactivity (dialogs, snackbars, drawer toggle) lives
+   inside the pages themselves via @rendermode InteractiveServer.
 
-    <main>
-        <div class="top-row px-4">
-            <AuthorizeView>
-                <Authorized>
-                    <span class="me-3">Hola, @context.User.Identity?.Name</span>
-                    <form action="Account/Logout" method="post" class="d-inline">
-                        <AntiforgeryToken />
-                        <button type="submit" class="btn btn-link">Cerrar sesión</button>
-                    </form>
-                </Authorized>
-                <NotAuthorized>
-                    <a href="Account/Register" class="me-3">Registrarme</a>
-                    <a href="Account/Login">Iniciar sesión</a>
-                </NotAuthorized>
-            </AuthorizeView>
-        </div>
+   The sidebar only renders for authenticated users — anonymous visitors get
+   a marketing-style layout with just the top bar. *@
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<MudThemeProvider Theme="AppTheme.Instance" IsDarkMode="true" />
+<MudPopoverProvider />
+<MudDialogProvider FullWidth="true" MaxWidth="MaxWidth.Small" CloseButton="true" />
+<MudSnackbarProvider />
+
+<AuthorizeView>
+    <Authorized>
+        <MudLayout>
+            <MudAppBar Elevation="0" Class="gf-appbar" Fixed="true">
+                <MudText Typo="Typo.h5" Class="ml-2">
+                    <span class="gf-brand">Gestor Financiero</span>
+                </MudText>
+                <MudSpacer />
+                <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Person" Class="mr-3">
+                    @context.User.Identity?.Name
+                </MudChip>
+                <form action="Account/Logout" method="post" class="d-inline">
+                    <AntiforgeryToken />
+                    <MudTooltip Text="Cerrar sesión">
+                        <button type="submit"
+                                class="mud-icon-button mud-ripple mud-icon-button-color-inherit"
+                                style="all:unset;padding:8px;border-radius:50%;cursor:pointer;display:inline-flex">
+                            <MudIcon Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" />
+                        </button>
+                    </MudTooltip>
+                </form>
+            </MudAppBar>
+
+            <MudDrawer Open="true"
+                       Fixed="true"
+                       Variant="DrawerVariant.Responsive"
+                       ClipMode="DrawerClipMode.Always"
+                       Elevation="0"
+                       Class="gf-drawer">
+                <NavMenu />
+            </MudDrawer>
+
+            <MudMainContent Class="gf-main">
+                <MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+                    @Body
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
+    </Authorized>
+
+    <NotAuthorized>
+        @* Landing shell: no sidebar, minimal top bar with brand + auth CTAs. *@
+        <MudLayout>
+            <MudAppBar Elevation="0" Class="gf-appbar" Fixed="true">
+                <MudText Typo="Typo.h5" Class="ml-2">
+                    <span class="gf-brand">Gestor Financiero</span>
+                </MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Href="Account/Login"
+                           StartIcon="@Icons.Material.Filled.Login">
+                    Iniciar sesión
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Href="Account/Register"
+                           Class="ml-2">
+                    Registrarme
+                </MudButton>
+            </MudAppBar>
+
+            <MudMainContent Class="gf-main">
+                <MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+                    @Body
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
+    </NotAuthorized>
+</AuthorizeView>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    Ocurrió un error inesperado.
+    <a href="." class="reload">Recargar</a>
     <span class="dismiss">🗙</span>
 </div>

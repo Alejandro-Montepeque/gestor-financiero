@@ -1,238 +1,403 @@
+/* ═══════════════════════════════════════════════════════════
+   Gestor Financiero — global CSS overlay on top of MudBlazor
+   ═══════════════════════════════════════════════════════════ */
+
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: var(--mud-palette-background);
+    color: var(--mud-palette-text-primary);
 }
 
-a, .btn-link {
-    color: #006bb7;
+/* ── Brand gradient text (used in the AppBar title + landing) ── */
+.gf-brand {
+    background: linear-gradient(90deg, #A78BFA, #22D3EE, #F472B6, #A78BFA);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gf-gradient 8s ease infinite;
+    font-weight: 700;
 }
 
-.btn-primary {
-    color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+@keyframes gf-gradient {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+/* ── AppBar / Drawer polish ── */
+.gf-appbar {
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    backdrop-filter: blur(10px);
 }
 
-.content {
-    padding-top: 1.1rem;
+.gf-drawer .mud-drawer-content {
+    border-right: 1px solid var(--mud-palette-lines-default);
 }
 
-h1:focus {
-    outline: none;
+.gf-main {
+    min-height: 100vh;
 }
 
-.valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+.gf-navmenu .mud-nav-link {
+    border-radius: 10px;
+    margin: 2px 4px;
+    transition: background 0.2s ease;
 }
 
-.invalid {
-    outline: 1px solid #e50000;
+.gf-navmenu .mud-nav-link:hover {
+    background: rgba(167, 139, 250, 0.08);
 }
 
-.validation-message {
-    color: #e50000;
+.gf-navmenu .mud-nav-link.active {
+    background: rgba(167, 139, 250, 0.15);
+    color: var(--mud-palette-primary);
 }
 
-.blazor-error-boundary {
-    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
-    padding: 1rem 1rem 1rem 3.7rem;
-    color: white;
-}
+/* ═══════════════════════════════════════════════════════════
+   Auth layout (Login / Register / AccessDenied / Lockout)
+   ═══════════════════════════════════════════════════════════ */
 
-    .blazor-error-boundary::after {
-        content: "An error has occurred."
-    }
-
-.darker-border-checkbox.form-check-input {
-    border-color: #929292;
-}
-
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-    color: var(--bs-secondary-color);
-    text-align: end;
-}
-
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-    text-align: start;
-}
-/* ─── Auth pages (Register / Login / Access denied) ─── */
-.auth-shell {
-    min-height: 80vh;
+.auth-bg {
+    min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 2rem 1rem;
+    background:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(167, 139, 250, 0.18), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(34, 211, 238, 0.10), transparent),
+        radial-gradient(ellipse 50% 30% at 20% 80%, rgba(244, 114, 182, 0.08), transparent),
+        var(--mud-palette-background);
+    position: relative;
+}
+
+.auth-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(167, 139, 250, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(167, 139, 250, 0.04) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+}
+
+.auth-branding {
+    text-align: center;
+    margin-bottom: 2rem;
+    z-index: 1;
+}
+
+.auth-content {
+    width: 100%;
+    max-width: 460px;
+    z-index: 1;
+}
+
+.auth-footer {
+    margin-top: 2rem;
+    z-index: 1;
 }
 
 .auth-card {
     width: 100%;
-    max-width: 420px;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 2rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 16px;
 }
 
-.auth-card h1 {
-    font-size: 1.75rem;
-    margin: 0 0 0.5rem 0;
-    color: #111827;
-}
+/* ═══════════════════════════════════════════════════════════
+   Dashboard stat cards
+   ═══════════════════════════════════════════════════════════ */
 
-.auth-card .lead {
-    color: #6b7280;
-    margin-bottom: 1.5rem;
-    font-size: 1rem;
-}
-
-.auth-card .field {
-    margin-bottom: 1rem;
-}
-
-.auth-card .field label {
-    display: block;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #374151;
-    margin-bottom: 0.375rem;
-}
-
-.auth-card .form-control {
-    width: 100%;
-    padding: 0.625rem 0.875rem;
-    border-radius: 8px;
-    border: 1px solid #d1d5db;
-    font-size: 0.9375rem;
-}
-
-.auth-card .form-control:focus {
-    border-color: #1b6ec2;
-    box-shadow: 0 0 0 3px rgba(27, 110, 194, 0.15);
-    outline: none;
-}
-
-.auth-card .field-inline {
-    margin-bottom: 1rem;
-}
-
-.auth-card .checkbox {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #374151;
-    cursor: pointer;
-}
-
-.auth-card .btn-primary.w-100 {
-    width: 100%;
-    padding: 0.625rem 1rem;
-    font-weight: 600;
-}
-
-.auth-card .auth-footer {
-    text-align: center;
-    color: #6b7280;
-    margin-top: 1.25rem;
-    font-size: 0.9375rem;
-}
-
-.auth-card .field-error {
-    color: #dc2626;
-    font-size: 0.8125rem;
-    margin-top: 0.25rem;
-    display: block;
-}
-
-.auth-card .form-errors {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #991b1b;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    margin-bottom: 1rem;
-    list-style: none;
-}
-
-/* ─── CRUD pages (Categories / Transactions) ─── */
-.page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
-}
-
-.page-header h1 {
-    margin: 0;
-    color: #111827;
-}
-
-.filters {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
-    padding: 1rem;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-}
-
-.filters label {
-    display: block;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: #374151;
-    margin-bottom: 0.25rem;
-}
-
-.cat-swatch {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border-radius: 4px;
-    margin-right: 0.5rem;
-    vertical-align: middle;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.text-success { color: #16a34a; }
-.text-danger { color: #dc2626; }
-
-/* Fake modal (until we install MudBlazor with a proper Dialog) */
-.modal-backdrop-fake {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 900;
-}
-
-.modal-fake {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    border-radius: 12px;
+.gf-stat {
     padding: 1.5rem;
-    width: min(500px, 90vw);
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border-radius: 14px;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.gf-stat:hover {
+    transform: translateY(-2px);
+    border-color: rgba(167, 139, 250, 0.4);
+}
+
+.gf-stat::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--mud-palette-primary);
+    opacity: 0.6;
+}
+
+.gf-stat-income::before   { background: var(--mud-palette-success); }
+.gf-stat-expense::before  { background: var(--mud-palette-error); }
+.gf-stat-balance::before  { background: var(--mud-palette-primary); }
+.gf-stat-savings::before  { background: var(--mud-palette-info); }
+
+.gf-cta {
+    border-radius: 14px;
+    background: linear-gradient(135deg,
+        rgba(167, 139, 250, 0.10),
+        rgba(34, 211, 238, 0.05));
+    border: 1px solid rgba(167, 139, 250, 0.25);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Landing (not logged in)
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-landing {
+    padding: 6rem 1rem 4rem;
+    text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Blazor error toast (bottom of page)
+   ═══════════════════════════════════════════════════════════ */
+
+#blazor-error-ui {
+    background: #b32121;
+    color: white;
+    display: none;
+    padding: 1rem 3.5rem;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
     z-index: 1000;
 }
 
-.modal-fake h2 {
-    font-size: 1.25rem;
-    margin: 0 0 1rem 0;
+#blazor-error-ui .dismiss {
+    position: absolute;
+    top: 0.5rem;
+    right: 1rem;
+    cursor: pointer;
 }
 
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 1.5rem;
+/* ═══════════════════════════════════════════════════════════
+   Landing feature cards
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-feature {
+    padding: 1.5rem;
+    height: 100%;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 14px;
+    text-align: left;
+    transition: transform 0.2s ease, border-color 0.2s ease;
 }
+
+.gf-feature:hover {
+    transform: translateY(-2px);
+    border-color: rgba(167, 139, 250, 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CRUD panels (Categories / Transactions)
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-panel {
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.gf-table thead th {
+    background: rgba(255, 255, 255, 0.02);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    color: var(--mud-palette-text-secondary);
+}
+
+.gf-table tbody tr:hover {
+    background: rgba(167, 139, 250, 0.04);
+}
+
+/* ── Category color dot (used in tables + form preview) ── */
+.cat-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+}
+
+.cat-preview {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--mud-palette-lines-default);
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Empty states (Budgets / Debts placeholders)
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-empty {
+    background: var(--mud-palette-surface);
+    border: 1px dashed var(--mud-palette-lines-default);
+    border-radius: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Recent transactions widget (home dashboard)
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-recent {
+    padding: 0;
+}
+
+.gf-recent-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.gf-recent-row:last-child {
+    border-bottom: none;
+}
+
+.gf-recent-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Deltas widget (comparativa mes pasado)
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-delta {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Expense distribution bar
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-distribution {
+    padding-top: 0.5rem;
+}
+
+.gf-bar {
+    display: flex;
+    width: 100%;
+    height: 14px;
+    border-radius: 7px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.gf-bar-fixed    { background: linear-gradient(90deg, #F87171, #EF4444); }
+.gf-bar-variable { background: linear-gradient(90deg, #FBBF24, #F59E0B); }
+.gf-bar-debt     { background: linear-gradient(90deg, #A78BFA, #7C3AED); }
+
+.gf-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Health metrics — savings rate ring
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-ring {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gf-ring-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Password strength meter (register + reset)
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-strength-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.gf-strength-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+    transition: background 0.2s ease;
+}
+
+.gf-strength-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.25s ease, background 0.25s ease;
+}
+
+.gf-strength-0::after { width: 0%;   background: transparent; }
+.gf-strength-1::after { width: 25%;  background: var(--mud-palette-error); }
+.gf-strength-2::after { width: 50%;  background: var(--mud-palette-warning); }
+.gf-strength-3::after { width: 75%;  background: var(--mud-palette-info); }
+.gf-strength-4::after { width: 100%; background: var(--mud-palette-success); }
+
+.gf-strength-label {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+    min-height: 1em;
+}
+
+/* ── Show/hide password button ── */
+.gf-password-toggle {
+    background: transparent;
+    border: 0;
+    padding: 0.25rem;
+    cursor: pointer;
+    color: var(--mud-palette-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.gf-password-toggle:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--mud-palette-text-primary);
+}
+
+.gf-password-toggle .icon-eye         { display: inline; }
+.gf-password-toggle .icon-eye-off     { display: none; }
+.gf-password-toggle.is-showing .icon-eye     { display: none; }
+.gf-password-toggle.is-showing .icon-eye-off { display: inline; }

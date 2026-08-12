@@ -1,0 +1,31 @@
+@page "/debts"
+@attribute [Authorize]
+
+<PageTitle>Deudas — Gestor Financiero</PageTitle>
+
+<MudStack Spacing="6">
+    <div>
+        <MudText Typo="Typo.h4">Deudas</MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+            Seguí el capital, el interés y el saldo restante de cada deuda.
+        </MudText>
+    </div>
+
+    <MudPaper Elevation="0" Class="gf-empty pa-12 text-center">
+        <MudIcon Icon="@Icons.Material.Filled.CreditCard"
+                 Size="Size.Large"
+                 Color="Color.Warning"
+                 Class="mb-4" />
+        <MudText Typo="Typo.h5" Class="mb-2">Muy pronto</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" Style="max-width:500px;margin:0 auto">
+            Vas a poder registrar tarjetas, préstamos y créditos, aplicar pagos
+            con desglose de capital vs. interés, y ver la amortización mes a mes.
+        </MudText>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   Href="categories"
+                   StartIcon="@Icons.Material.Filled.Category">
+            Mientras tanto, revisá tus categorías
+        </MudButton>
+    </MudPaper>
+</MudStack>
