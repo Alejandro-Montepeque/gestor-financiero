@@ -35,6 +35,12 @@
 
     <!-- Identity + EF Core bridge (separate from shared framework) -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
+
+    <!-- MailKit: SMTP client for sending emails (welcome, password reset, etc.).
+         >= 4.16.0 patches CVE-2026-41319 (STARTTLS response injection in MailKit)
+         and CVE-2026-30227 (CRLF injection in MimeKit). -->
+    <PackageReference Include="MailKit" Version="4.16.0" />
+    <PackageReference Include="MimeKit" Version="4.16.0" />
   </ItemGroup>
 
 </Project>
