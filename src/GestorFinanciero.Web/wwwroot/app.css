@@ -378,11 +378,23 @@ html, body {
     min-height: 1em;
 }
 
-/* ── Show/hide password button ── */
+/* ── Show/hide password button (overlays MudTextField, right side) ── */
+.gf-password-field {
+    position: relative;
+}
+
+.gf-password-field .gf-password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    z-index: 2;
+}
+
 .gf-password-toggle {
     background: transparent;
     border: 0;
-    padding: 0.25rem;
+    padding: 0.375rem;
     cursor: pointer;
     color: var(--mud-palette-text-secondary);
     display: inline-flex;
