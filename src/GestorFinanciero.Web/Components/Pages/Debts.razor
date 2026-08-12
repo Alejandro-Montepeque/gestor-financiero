@@ -14,27 +14,29 @@
 <PageTitle>Deudas — Gestor Financiero</PageTitle>
 
 <MudStack Spacing="6">
-    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-        <div>
+    <div class="gf-page-header">
+        <div class="gf-page-title">
             <MudText Typo="Typo.h4">Deudas</MudText>
             <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
                 Registrá tus deudas, pagos y seguí el saldo restante.
             </MudText>
         </div>
-        <MudButton StartIcon="@Icons.Material.Filled.Add"
-                   Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   OnClick="StartCreate">
-            Nueva deuda
-        </MudButton>
-    </MudStack>
+        <div class="gf-page-actions">
+            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="StartCreate">
+                Nueva deuda
+            </MudButton>
+        </div>
+    </div>
 
-    <MudPaper Elevation="0" Class="gf-panel">
+    @* ═══ Desktop: full table ═══ *@
+    <MudPaper Elevation="0" Class="gf-panel d-none d-sm-block">
         <MudTable Items="debts"
                   Loading="loading"
                   LoadingProgressColor="Color.Primary"
                   Hover="true"
-                  Breakpoint="Breakpoint.Sm"
                   Class="gf-table">
             <NoRecordsContent>
                 <MudText Class="pa-6 text-center mud-text-secondary">
@@ -105,6 +107,80 @@
             </RowTemplate>
         </MudTable>
     </MudPaper>
+
+    @* ═══ Mobile: card list ═══ *@
+    <div class="d-sm-none">
+        @if (loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (debts.Count == 0)
+        {
+            <MudPaper Elevation="0" Class="gf-panel pa-6 text-center">
+                <MudText Class="mud-text-secondary">
+                    Aún no registraste deudas. Creá la primera con "Nueva deuda".
+                </MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <div class="gf-card-list">
+                @foreach (var d in debts)
+                {
+                    <div class="gf-mobile-card">
+                        <div class="gf-mobile-card-header">
+                            <div class="gf-mobile-card-title">
+                                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Small" Color="Color.Primary" />
+                                <span class="gf-mobile-card-title-text">@d.Name</span>
+                            </div>
+                            <span class="gf-mobile-card-amount expense">
+                                @Format(d.CurrentBalance, d.Currency)
+                            </span>
+                        </div>
+                        <div class="gf-mobile-card-meta">
+                            @if (d.InterestRate is not null)
+                            {
+                                <span><strong>@d.InterestRate.Value.ToString("N2")%</strong> APR</span>
+                                <span class="sep">·</span>
+                            }
+                            @if (d.MinimumPayment is not null)
+                            {
+                                <span>Mín: @Format(d.MinimumPayment.Value, d.Currency)</span>
+                                <span class="sep">·</span>
+                            }
+                            <span>@d.PaymentCount pago@(d.PaymentCount == 1 ? "" : "s")</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(d.Notes))
+                        {
+                            <div class="mud-text-secondary" style="font-size:0.8125rem">@d.Notes</div>
+                        }
+                        <div class="gf-mobile-card-footer">
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Text"
+                                       Color="Color.Success"
+                                       StartIcon="@Icons.Material.Filled.Payments"
+                                       Disabled="@(d.CurrentBalance == 0)"
+                                       OnClick="() => StartPayment(d)">
+                                Aplicar pago
+                            </MudButton>
+                            <div class="gf-mobile-card-actions">
+                                <MudIconButton Icon="@Icons.Material.Filled.History"
+                                               Size="Size.Small"
+                                               OnClick="() => OpenHistory(d)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Size="Size.Small"
+                                               OnClick="() => StartEdit(d)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               OnClick="() => DeleteAsync(d)" />
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
 </MudStack>
 
 <!-- Dialog: crear/editar deuda -->
@@ -134,7 +210,7 @@
                                   Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.AccountBalance" />
 
-                    <MudStack Row Spacing="3">
+                    <div class="gf-form-row">
                         <MudNumericField T="decimal"
                                          Label="Saldo actual"
                                          @bind-Value="editing.CurrentBalance"
@@ -153,9 +229,9 @@
                                       Variant="Variant.Outlined"
                                       MaxLength="3"
                                       Style="max-width:120px" />
-                    </MudStack>
+                    </div>
 
-                    <MudStack Row Spacing="3">
+                    <div class="gf-form-row">
                         <MudNumericField T="decimal?"
                                          Label="Tasa anual (%)"
                                          @bind-Value="editing.InterestRate"
@@ -177,7 +253,7 @@
                                          Step="10M"
                                          Clearable="true"
                                          HelperText="Opcional." />
-                    </MudStack>
+                    </div>
 
                     <MudTextField T="string"
                                   Label="Notas"

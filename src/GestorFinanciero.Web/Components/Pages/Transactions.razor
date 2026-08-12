@@ -18,14 +18,14 @@
 <PageTitle>Transacciones — Gestor Financiero</PageTitle>
 
 <MudStack Spacing="6">
-    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-        <div>
+    <div class="gf-page-header">
+        <div class="gf-page-title">
             <MudText Typo="Typo.h4">Transacciones</MudText>
             <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
                 Cada ingreso y gasto en un solo lugar.
             </MudText>
         </div>
-        <MudStack Row Spacing="2">
+        <div class="gf-page-actions">
             <MudButton StartIcon="@Icons.Material.Filled.FileDownload"
                        Variant="Variant.Outlined"
                        Color="Color.Default"
@@ -40,11 +40,25 @@
                        Disabled="@(categoryList.Count == 0)">
                 Nueva transacción
             </MudButton>
-        </MudStack>
-    </MudStack>
+        </div>
+    </div>
 
-    <MudPaper Elevation="0" Class="gf-panel pa-4">
-        <MudGrid Spacing="3">
+    <MudExpansionPanels Elevation="0" Class="gf-filters-panel">
+        <MudExpansionPanel Expanded="@_filtersExpanded" ExpandedChanged="v => _filtersExpanded = v">
+            <TitleContent>
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.FilterList" />
+                    <MudText Typo="Typo.subtitle1">Filtros</MudText>
+                    @if (ActiveFilterCount > 0)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">
+                            @ActiveFilterCount
+                        </MudChip>
+                    }
+                </MudStack>
+            </TitleContent>
+            <ChildContent>
+                <MudGrid Spacing="3">
             <MudItem xs="12" sm="6" md="3">
                 <MudDatePicker Label="Desde"
                                Date="_fromDate"
@@ -148,14 +162,16 @@
                 </MudButton>
             </MudItem>
         </MudGrid>
-    </MudPaper>
+            </ChildContent>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
 
-    <MudPaper Elevation="0" Class="gf-panel">
+    @* ═══ Desktop: full table ═══ *@
+    <MudPaper Elevation="0" Class="gf-panel d-none d-sm-block">
         <MudTable Items="transactions"
                   Loading="loading"
                   LoadingProgressColor="Color.Primary"
                   Hover="true"
-                  Breakpoint="Breakpoint.Sm"
                   Class="gf-table">
             <NoRecordsContent>
                 <MudText Class="pa-6 text-center mud-text-secondary">
@@ -218,6 +234,62 @@
             </FooterContent>
         </MudTable>
     </MudPaper>
+
+    @* ═══ Mobile: card list ═══ *@
+    <div class="d-sm-none">
+        @if (loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (transactions.Count == 0)
+        {
+            <MudPaper Elevation="0" Class="gf-panel pa-6 text-center">
+                <MudText Class="mud-text-secondary">Sin transacciones para el filtro actual.</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <div class="gf-card-list">
+                @foreach (var t in transactions)
+                {
+                    <div class="gf-mobile-card">
+                        <div class="gf-mobile-card-header">
+                            <div class="gf-mobile-card-title">
+                                <div class="cat-dot" style="@($"background:{t.CategoryColor}")"></div>
+                                <span class="gf-mobile-card-title-text">@(t.Description ?? t.CategoryName)</span>
+                            </div>
+                            <span class="gf-mobile-card-amount @(IsIncome(t.CategoryType) ? "income" : "expense")">
+                                @(IsIncome(t.CategoryType) ? "+" : "−")@t.Amount.ToString("N2", CultureInfo.InvariantCulture) @t.Currency
+                            </span>
+                        </div>
+                        <div class="gf-mobile-card-meta">
+                            <span>@t.CategoryName</span>
+                            <span class="sep">·</span>
+                            <span>@t.Date.ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-ES"))</span>
+                        </div>
+                        <div class="gf-mobile-card-footer">
+                            <span></span>
+                            <div class="gf-mobile-card-actions">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Size="Size.Small"
+                                               OnClick="() => StartEdit(t)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               OnClick="() => DeleteAsync(t)" />
+                            </div>
+                        </div>
+                    </div>
+                }
+                <MudPaper Elevation="0" Class="gf-panel pa-3 mud-text-secondary" Style="font-size:0.8125rem">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <span>@transactions.Count resultado@(transactions.Count == 1 ? "" : "s")</span>
+                        <span>Total: <strong>@TotalDisplay()</strong></span>
+                    </MudStack>
+                </MudPaper>
+            </div>
+        }
+    </div>
 </MudStack>
 
 <MudDialog @bind-Visible="dialogOpen" Options="@_dialogOptions">
@@ -251,7 +323,7 @@
                         }
                     </MudSelect>
 
-                    <MudStack Row Spacing="3">
+                    <div class="gf-form-row">
                         <MudNumericField T="decimal"
                                          Label="Monto"
                                          @bind-Value="editing.Amount"
@@ -269,7 +341,7 @@
                                       Variant="Variant.Outlined"
                                       MaxLength="3"
                                       Style="max-width:120px" />
-                    </MudStack>
+                    </div>
 
                     <MudDatePicker Label="Fecha"
                                    Date="_editingDate"
@@ -312,7 +384,17 @@
     private List<CategoryDto> categoryList = new();
     private bool loading = true;
     private bool exporting;
+    private bool _filtersExpanded = true;  // desktop default; CSS/user can collapse on mobile
     private TransactionFilter filter = new();
+
+    private int ActiveFilterCount =>
+        (filter.From is not null ? 1 : 0) +
+        (filter.To is not null ? 1 : 0) +
+        (filter.CategoryId is not null ? 1 : 0) +
+        (filter.CategoryType is not null ? 1 : 0) +
+        (filter.MinAmount is not null ? 1 : 0) +
+        (filter.MaxAmount is not null ? 1 : 0) +
+        (!string.IsNullOrWhiteSpace(filter.Search) ? 1 : 0);
 
     private DateTime? _fromDate;
     private DateTime? _toDate;

@@ -1,11 +1,12 @@
 @inherits LayoutComponentBase
 
-@* Layout stays static SSR: Body is a RenderFragment and interactive layouts
-   can't accept those. Interactivity (dialogs, snackbars, drawer toggle) lives
-   inside the pages themselves via @rendermode InteractiveServer.
+@* Layout runs in the render mode chosen by the page (see App.razor). Auth
+   pages use AuthLayout, so this layout only ever renders for the main app
+   pages. Some are Interactive Server (Home, Transactions, Budgets, etc.)
+   and some are Static SSR (all /Account/Manage/* pages).
 
-   The sidebar only renders for authenticated users — anonymous visitors get
-   a marketing-style layout with just the top bar. *@
+   Because @onclick doesn't work on static SSR, the mobile drawer toggle
+   uses a pure-CSS checkbox+label pattern that works in both modes. *@
 
 <MudThemeProvider Theme="AppTheme.Instance" IsDarkMode="true" />
 <MudPopoverProvider />
@@ -14,21 +15,43 @@
 
 <AuthorizeView>
     <Authorized>
+        @* Hidden checkbox drives the mobile nav open/closed state via CSS.
+           Any <label for="gf-mobile-nav-toggle"> flips it. Positioned as a
+           SIBLING of the mobile nav below so the ~ combinator works. *@
+        <input type="checkbox" id="gf-mobile-nav-toggle" class="gf-mobile-nav-toggle" hidden />
+
         <MudLayout>
             <MudAppBar Elevation="0" Class="gf-appbar" Fixed="true">
-                <MudText Typo="Typo.h5" Class="ml-2">
+                @* Hamburger — CSS toggles the mobile nav via the checkbox above. *@
+                <label for="gf-mobile-nav-toggle"
+                       class="gf-hamburger d-md-none"
+                       aria-label="Abrir menú">
+                    <MudIcon Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" />
+                </label>
+
+                <MudText Typo="Typo.h5" Class="gf-brand-title ml-2">
                     <span class="gf-brand">Gestor Financiero</span>
                 </MudText>
+
                 <MudSpacer />
+
+                @* Username: icon+text on sm+, just avatar on xs to save space. *@
                 <MudTooltip Text="Mi cuenta">
                     <MudButton Href="Account/Manage"
                                Variant="Variant.Text"
                                Color="Color.Inherit"
                                StartIcon="@Icons.Material.Filled.Person"
-                               Class="mr-2">
-                        @context.User.Identity?.Name
+                               Class="gf-user-button mr-2 d-none d-sm-inline-flex">
+                        @UserDisplayName(context.User.Identity?.Name)
                     </MudButton>
                 </MudTooltip>
+                <MudTooltip Text="@(context.User.Identity?.Name ?? "Mi cuenta")">
+                    <MudIconButton Icon="@Icons.Material.Filled.Person"
+                                   Color="Color.Inherit"
+                                   Href="Account/Manage"
+                                   Class="d-sm-none mr-1" />
+                </MudTooltip>
+
                 <form action="Account/Logout" method="post" class="d-inline">
                     <AntiforgeryToken />
                     <MudTooltip Text="Cerrar sesión">
@@ -41,47 +64,82 @@
                 </form>
             </MudAppBar>
 
+            @* Desktop drawer: persistent on md+, hidden on <md (see CSS). *@
             <MudDrawer Open="true"
                        Fixed="true"
-                       Variant="DrawerVariant.Responsive"
+                       Variant="DrawerVariant.Persistent"
                        ClipMode="DrawerClipMode.Always"
                        Elevation="0"
-                       Class="gf-drawer">
+                       Class="gf-drawer d-none d-md-block">
                 <NavMenu />
             </MudDrawer>
 
             <MudMainContent Class="gf-main">
-                <MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+                <MudContainer MaxWidth="MaxWidth.Large" Class="gf-container">
                     @Body
                 </MudContainer>
             </MudMainContent>
         </MudLayout>
+
+        @* Mobile-only nav — sibling of the checkbox above so :checked ~ works.
+           Backdrop label closes it when tapped. *@
+        <div class="gf-mobile-nav d-md-none">
+            <label for="gf-mobile-nav-toggle"
+                   class="gf-mobile-nav-backdrop"
+                   aria-label="Cerrar menú"></label>
+            <aside class="gf-mobile-nav-panel">
+                <div class="gf-mobile-nav-header">
+                    <span class="gf-brand" style="font-size:1.1rem">Gestor Financiero</span>
+                    <label for="gf-mobile-nav-toggle"
+                           class="gf-mobile-nav-close"
+                           aria-label="Cerrar">
+                        <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                    </label>
+                </div>
+                @* Wrap NavMenu links so clicking one also closes the drawer.
+                   Uses another label as an overlay listener via event bubbling. *@
+                <div class="gf-mobile-nav-links" onclick="document.getElementById('gf-mobile-nav-toggle').checked = false">
+                    <NavMenu />
+                </div>
+            </aside>
+        </div>
     </Authorized>
 
     <NotAuthorized>
         @* Landing shell: no sidebar, minimal top bar with brand + auth CTAs. *@
         <MudLayout>
             <MudAppBar Elevation="0" Class="gf-appbar" Fixed="true">
-                <MudText Typo="Typo.h5" Class="ml-2">
+                <MudText Typo="Typo.h5" Class="gf-brand-title ml-2">
                     <span class="gf-brand">Gestor Financiero</span>
                 </MudText>
                 <MudSpacer />
+                @* On xs: compact icon-only buttons. On sm+: full labels. *@
                 <MudButton Variant="Variant.Text"
                            Color="Color.Inherit"
                            Href="Account/Login"
-                           StartIcon="@Icons.Material.Filled.Login">
+                           StartIcon="@Icons.Material.Filled.Login"
+                           Class="d-none d-sm-inline-flex">
                     Iniciar sesión
                 </MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.Login"
+                               Color="Color.Inherit"
+                               Href="Account/Login"
+                               Class="d-sm-none" />
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
                            Href="Account/Register"
-                           Class="ml-2">
+                           Class="ml-2 d-none d-sm-inline-flex">
                     Registrarme
                 </MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.PersonAdd"
+                               Color="Color.Primary"
+                               Variant="Variant.Filled"
+                               Href="Account/Register"
+                               Class="ml-1 d-sm-none" />
             </MudAppBar>
 
             <MudMainContent Class="gf-main">
-                <MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+                <MudContainer MaxWidth="MaxWidth.Large" Class="gf-container">
                     @Body
                 </MudContainer>
             </MudMainContent>
@@ -94,3 +152,19 @@
     <a href="." class="reload">Recargar</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    // Truncate long emails so the AppBar doesn't overflow. Keep the local part
+    // and elide the domain — e.g. "alejandro.montepeque@goes.gob.sv" → "alejandro.m…".
+    private static string UserDisplayName(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        var name = raw.Trim();
+
+        // Prefer the local part of an email if present.
+        var at = name.IndexOf('@');
+        if (at > 0) name = name[..at];
+
+        return name.Length > 16 ? name[..15] + "…" : name;
+    }
+}

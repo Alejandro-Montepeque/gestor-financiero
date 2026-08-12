@@ -40,6 +40,336 @@ html, body {
     min-height: 100vh;
 }
 
+/* Container padding scales down on small screens so tables and grids get
+   more usable horizontal space. */
+.gf-container {
+    padding: 1.5rem 1rem;
+}
+
+@media (min-width: 600px) {
+    .gf-container {
+        padding: 1.5rem;
+    }
+}
+
+/* Truncate the brand title on tiny screens so it never pushes the CTAs
+   off the AppBar. */
+.gf-brand-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100vw - 200px);
+    min-width: 0;
+}
+
+@media (max-width: 400px) {
+    .gf-brand-title {
+        font-size: 1.1rem !important;
+    }
+}
+
+.gf-user-button {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Mobile navigation drawer (works in Static SSR — no @onclick)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Hamburger button styled like a MudIconButton so it blends in. */
+.gf-hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: inherit;
+    transition: background 0.15s ease;
+    margin-right: 4px;
+}
+
+.gf-hamburger:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Mobile nav container — hidden by default, revealed by the checkbox trick. */
+.gf-mobile-nav {
+    position: fixed;
+    inset: 0;
+    z-index: 1300;
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.gf-mobile-nav-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    cursor: pointer;
+}
+
+.gf-mobile-nav-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 85vw);
+    background: var(--mud-palette-surface);
+    border-right: 1px solid var(--mud-palette-lines-default);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.gf-mobile-nav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    flex-shrink: 0;
+}
+
+.gf-mobile-nav-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--mud-palette-text-secondary);
+    transition: background 0.15s ease;
+}
+
+.gf-mobile-nav-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.gf-mobile-nav-links {
+    padding: 0.5rem;
+    flex: 1;
+}
+
+/* The magic: when the hidden checkbox is checked, show the drawer. */
+.gf-mobile-nav-toggle:checked ~ .gf-mobile-nav {
+    pointer-events: auto;
+    visibility: visible;
+}
+
+.gf-mobile-nav-toggle:checked ~ .gf-mobile-nav .gf-mobile-nav-backdrop {
+    opacity: 1;
+}
+
+.gf-mobile-nav-toggle:checked ~ .gf-mobile-nav .gf-mobile-nav-panel {
+    transform: translateX(0);
+}
+
+/* On mobile: fully suppress MudDrawer and its reserved padding. Our custom
+   .gf-mobile-nav replaces it. MudBlazor uses CSS variables (--mud-drawer-width-left)
+   for the reserved space, so override those too. */
+@media (max-width: 959px) {
+    /* Zero-out the drawer width CSS var — this cascades to padding + appbar. */
+    .mud-layout {
+        --mud-drawer-width-left: 0 !important;
+        --mud-drawer-width-right: 0 !important;
+        --mud-drawer-content-width: 0 !important;
+    }
+
+    /* Belt-and-suspenders: hide the drawer element entirely. */
+    .gf-drawer,
+    .mud-drawer.gf-drawer,
+    .mud-drawer[class*="gf-drawer"] {
+        display: none !important;
+    }
+
+    /* Explicitly reset paddings/margins on MudMainContent and MudAppBar. */
+    .mud-main-content,
+    .gf-main {
+        padding-left: 0 !important;
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .mud-appbar {
+        padding-left: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Lock body scroll while the mobile drawer is open. */
+    .gf-mobile-nav-toggle:checked ~ .mud-layout .gf-main {
+        overflow: hidden;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Manage account — horizontal tab strip (mobile version)
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-manage-nav-tabs {
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding: 0.5rem 0;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+
+.gf-manage-nav-tabs::-webkit-scrollbar { height: 4px; }
+.gf-manage-nav-tabs::-webkit-scrollbar-thumb {
+    background: rgba(167, 139, 250, 0.2);
+    border-radius: 2px;
+}
+
+.gf-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: 8px;
+    color: var(--mud-palette-text-secondary);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.gf-tab:hover {
+    background: rgba(167, 139, 250, 0.08);
+    color: var(--mud-palette-text-primary);
+}
+
+.gf-tab.active {
+    background: rgba(167, 139, 250, 0.15);
+    color: var(--mud-palette-primary);
+}
+
+.gf-tab-danger.active {
+    background: rgba(244, 67, 54, 0.12);
+    color: var(--mud-palette-error);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Page headers (title + action button) — stack on xs
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+}
+
+.gf-page-header .gf-page-title {
+    min-width: 0;
+    flex: 1;
+}
+
+.gf-page-header .gf-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+@media (min-width: 600px) {
+    .gf-page-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .gf-page-header .gf-page-actions {
+        flex-wrap: nowrap;
+    }
+}
+
+/* ── 6-digit code input (VerifyCode.razor) ── */
+
+.gf-code-input input {
+    font-family: 'SF Mono', 'Consolas', 'Courier New', monospace !important;
+    font-size: 1.5rem !important;
+    letter-spacing: 0.35em !important;
+    text-align: center !important;
+    font-weight: 600 !important;
+}
+
+@media (max-width: 480px) {
+    .gf-code-input input {
+        font-size: 1.25rem !important;
+        letter-spacing: 0.25em !important;
+    }
+}
+
+/* ── Transactions filter panel ── */
+
+.gf-filters-panel .mud-expand-panel {
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.gf-filters-panel .mud-expand-panel-header {
+    padding: 0.75rem 1rem;
+}
+
+.gf-filters-panel .mud-expand-panel-content {
+    padding: 1rem;
+}
+
+/* ── Month navigator (Budgets) ── */
+
+.gf-month-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+}
+
+.gf-month-button {
+    font-size: 0.875rem;
+    min-width: 0;
+    flex-shrink: 1;
+    white-space: nowrap;
+}
+
+@media (min-width: 600px) {
+    .gf-month-button {
+        min-width: 180px;
+        font-size: 1rem;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Dialog form rows — stack on xs, side-by-side on sm+
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+@media (min-width: 600px) {
+    .gf-form-row {
+        flex-direction: row;
+        gap: 1rem;
+    }
+}
+
 .gf-navmenu .mud-nav-link {
     border-radius: 10px;
     margin: 2px 4px;
@@ -107,6 +437,49 @@ html, body {
     background: var(--mud-palette-surface);
     border: 1px solid var(--mud-palette-lines-default);
     border-radius: 16px;
+    padding: 1.5rem !important;
+}
+
+@media (min-width: 600px) {
+    .auth-card {
+        padding: 2rem !important;
+    }
+}
+
+/* Squeeze the auth background padding on tiny screens so the card
+   gets more usable width. */
+@media (max-width: 480px) {
+    .auth-bg {
+        padding: 1rem 0.75rem;
+    }
+}
+
+/* Landing hero — Typo.h2 is too big on mobile. Cascade sm/xs sizes. */
+.gf-hero-heading {
+    font-size: 2rem !important;
+    line-height: 1.15 !important;
+}
+
+@media (min-width: 600px) {
+    .gf-hero-heading {
+        font-size: 2.75rem !important;
+    }
+}
+
+@media (min-width: 960px) {
+    .gf-hero-heading {
+        font-size: 3.75rem !important;
+    }
+}
+
+.gf-landing {
+    padding: 3rem 1rem 4rem;
+}
+
+@media (min-width: 600px) {
+    .gf-landing {
+        padding: 6rem 1rem 4rem;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -155,8 +528,8 @@ html, body {
    ═══════════════════════════════════════════════════════════ */
 
 .gf-landing {
-    padding: 6rem 1rem 4rem;
     text-align: center;
+    /* Responsive padding is handled above (mobile-first). */
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -212,6 +585,19 @@ html, body {
     overflow: hidden;
 }
 
+/* Shrink pa-6 (24px) panel padding to 16px on xs so more content fits. */
+@media (max-width: 600px) {
+    .gf-panel.pa-6 {
+        padding: 1rem !important;
+    }
+    .gf-panel.pa-5 {
+        padding: 1rem !important;
+    }
+    .gf-stat {
+        padding: 1rem !important;
+    }
+}
+
 .gf-table thead th {
     background: rgba(255, 255, 255, 0.02);
     font-weight: 600;
@@ -223,6 +609,141 @@ html, body {
 
 .gf-table tbody tr:hover {
     background: rgba(167, 139, 250, 0.04);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Mobile card lists — replace tables with real card layouts
+   on <sm screens. Desktop keeps the MudTable via .d-none .d-sm-block.
+   ═══════════════════════════════════════════════════════════ */
+
+.gf-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+/* Cards visually distinct: lighter than page background, subtle border,
+   noticeable shadow. Use rgba values so contrast is guaranteed regardless
+   of the MudBlazor palette variables. */
+.gf-mobile-card {
+    background: rgba(255, 255, 255, 0.035) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 14px !important;
+    padding: 1rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25),
+                0 1px 2px rgba(0, 0, 0, 0.15);
+    transition: border-color 0.15s ease, background 0.15s ease;
+    overflow: hidden;
+}
+
+.gf-mobile-card:hover,
+.gf-mobile-card:focus-within {
+    border-color: rgba(167, 139, 250, 0.4) !important;
+    background: rgba(255, 255, 255, 0.055) !important;
+}
+
+/* Header row: title on the left, chip/amount on the right. Never wrap. */
+.gf-mobile-card-header {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.75rem !important;
+    flex-wrap: nowrap !important;
+    width: 100%;
+}
+
+.gf-mobile-card-title {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--mud-palette-text-primary);
+}
+
+.gf-mobile-card-title .cat-dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+}
+
+.gf-mobile-card-title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+/* Force chips/amounts on the right side to hold their line and not wrap. */
+.gf-mobile-card-header > .mud-chip,
+.gf-mobile-card-header > .gf-mobile-card-amount {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    white-space: nowrap !important;
+    align-self: center;
+}
+
+.gf-mobile-card-amount {
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.gf-mobile-card-amount.income  { color: var(--mud-palette-success); }
+.gf-mobile-card-amount.expense { color: var(--mud-palette-error); }
+
+.gf-mobile-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
+    line-height: 1.5;
+}
+
+.gf-mobile-card-meta .sep {
+    opacity: 0.4;
+    padding: 0 2px;
+}
+
+.gf-mobile-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    margin-top: 0.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gf-mobile-card-actions {
+    display: flex;
+    gap: 0.125rem;
+    flex-shrink: 0;
+}
+
+.gf-mobile-card-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+/* Budget action row: wrap the Save/Delete buttons on very small screens
+   instead of forcing them into a cramped single row. */
+@media (max-width: 480px) {
+    .gf-budget-actions {
+        flex-wrap: wrap !important;
+    }
+    .gf-budget-actions .mud-button {
+        flex: 1 1 100%;
+    }
 }
 
 /* ── Category color dot (used in tables + form preview) ── */

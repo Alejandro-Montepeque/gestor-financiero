@@ -14,14 +14,14 @@
 <PageTitle>Presupuestos — Gestor Financiero</PageTitle>
 
 <MudStack Spacing="6">
-    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-        <div>
+    <div class="gf-page-header">
+        <div class="gf-page-title">
             <MudText Typo="Typo.h4">Presupuestos</MudText>
             <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
                 Planificá cada mes y compará estimado vs. real.
             </MudText>
         </div>
-        <MudStack Row Spacing="1">
+        <div class="gf-page-actions gf-month-nav">
             <MudTooltip Text="Mes anterior">
                 <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
                                OnClick="PrevMonth"
@@ -29,7 +29,7 @@
             </MudTooltip>
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Primary"
-                       Style="min-width:180px"
+                       Class="gf-month-button"
                        OnClick="GoToToday">
                 @MonthLabel(_year, _month)
             </MudButton>
@@ -38,8 +38,8 @@
                                OnClick="NextMonth"
                                Disabled="loading" />
             </MudTooltip>
-        </MudStack>
-    </MudStack>
+        </div>
+    </div>
 
     @if (loading)
     {
@@ -82,10 +82,10 @@
         </MudGrid>
 
         <!-- Grid de categorías -->
-        <MudPaper Elevation="0" Class="gf-panel">
+        @* ═══ Desktop: table with inline editable estimated column ═══ *@
+        <MudPaper Elevation="0" Class="gf-panel d-none d-sm-block">
             <MudTable Items="_edits"
                       Hover="true"
-                      Breakpoint="Breakpoint.Sm"
                       Class="gf-table">
                 <NoRecordsContent>
                     <MudText Class="pa-6 text-center mud-text-secondary">
@@ -93,7 +93,6 @@
                     </MudText>
                 </NoRecordsContent>
                 <HeaderContent>
-                    <MudTh Style="width:40px"></MudTh>
                     <MudTh>Categoría</MudTh>
                     <MudTh>Tipo</MudTh>
                     <MudTh Style="width:180px" Class="text-right">Estimado</MudTh>
@@ -102,10 +101,10 @@
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd>
-                        <div class="cat-dot" style="@($"background:{context.Item.CategoryColor}")"></div>
-                    </MudTd>
-                    <MudTd>
-                        <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Item.CategoryName</MudText>
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <div class="cat-dot" style="@($"background:{context.Item.CategoryColor}")"></div>
+                            <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Item.CategoryName</MudText>
+                        </MudStack>
                     </MudTd>
                     <MudTd>
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorFor(context.Item.CategoryType)">
@@ -148,7 +147,73 @@
             </MudTable>
         </MudPaper>
 
-        <MudStack Row Justify="Justify.FlexEnd" Spacing="2">
+        @* ═══ Mobile: card list with inline editable estimated field ═══ *@
+        <div class="d-sm-none">
+            @if (_edits.Count == 0)
+            {
+                <MudPaper Elevation="0" Class="gf-panel pa-6 text-center">
+                    <MudText Class="mud-text-secondary">
+                        Todavía no tenés categorías. Creá algunas en /categories.
+                    </MudText>
+                </MudPaper>
+            }
+            else
+            {
+                <div class="gf-card-list">
+                    @foreach (var edit in _edits)
+                    {
+                        var item = edit.Item;
+                        <div class="gf-mobile-card">
+                            <div class="gf-mobile-card-header">
+                                <div class="gf-mobile-card-title">
+                                    <div class="cat-dot" style="@($"background:{item.CategoryColor}")"></div>
+                                    <span class="gf-mobile-card-title-text">@item.CategoryName</span>
+                                </div>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorFor(item.CategoryType)">
+                                    @TypeLabel(item.CategoryType)
+                                </MudChip>
+                            </div>
+
+                            <MudNumericField T="decimal"
+                                             Label="Estimado"
+                                             @bind-Value="edit.EstimatedAmount"
+                                             Variant="Variant.Outlined"
+                                             Margin="Margin.Dense"
+                                             Culture="@CultureInfo.InvariantCulture"
+                                             Format="N2"
+                                             Min="0"
+                                             Step="10M"
+                                             Immediate="true"
+                                             HideSpinButtons="true" />
+
+                            <div class="gf-mobile-card-meta">
+                                <span>Real:
+                                    <strong style="@($"color: var(--mud-palette-{(item.OverBudget ? "error" : "text-primary")})")">
+                                        @Format(item.ActualAmount)
+                                    </strong>
+                                </span>
+                                <span class="sep">·</span>
+                                <span>@item.PercentUsed.ToString("N0")% usado</span>
+                            </div>
+
+                            <div class="gf-mobile-card-progress">
+                                <MudProgressLinear Value="@Math.Min((double)item.PercentUsed, 100)"
+                                                   Color="@(item.OverBudget ? Color.Error : Color.Primary)"
+                                                   Rounded="true" Size="Size.Small" />
+                                @if (item.OverBudget)
+                                {
+                                    <MudText Typo="Typo.caption" Style="color:var(--mud-palette-error)">
+                                        +@Format(item.ActualAmount - item.EstimatedAmount) sobre presupuesto
+                                    </MudText>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <MudStack Row="@true" Justify="Justify.FlexEnd" Spacing="2" Class="gf-budget-actions">
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Error"
                        StartIcon="@Icons.Material.Filled.Delete"
