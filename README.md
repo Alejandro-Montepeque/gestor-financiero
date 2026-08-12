@@ -271,12 +271,21 @@ Seeders run automatically at startup and each one is recorded in `seeder_executi
 | `make secrets-set KEY="path" VALUE="value"`          | Set a secret                      |
 | `make secrets-clear`                                 | Delete every secret               |
 
-### Deploy (planned)
+### Docker
 
-| Command             | Description                                    |
-| ------------------- | ---------------------------------------------- |
-| `make docker-build` | Build the Docker image locally                 |
-| `make docker-run`   | Run the container against a Postgres via env   |
+| Command             | Description                                                                    |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `make docker-build` | Build the multi-stage image (`gestor-financiero:local` by default)             |
+| `make docker-run`   | Run the container on `:8080` reading env from `.env`                           |
+| `make docker-shell` | Open an `sh` inside the image for debugging                                    |
+| `make docker-scan`  | Run `docker scout cves` against the image                                      |
+| `make docker-clean` | Delete the local image                                                         |
+
+Override the image tag with `IMAGE=…`:
+
+```bash
+make docker-build IMAGE=us-central1-docker.pkg.dev/PROJECT/gf/app:v1.0.0
+```
 
 ### Help
 
@@ -286,15 +295,45 @@ Seeders run automatically at startup and each one is recorded in `seeder_executi
 
 ---
 
+## Deployment
+
+The app targets Google Cloud Run. The `Dockerfile` is a two-stage build (SDK 10 → ASP.NET runtime, Debian slim base) that:
+
+- Restores + publishes the Web project with cached layers
+- Runs as a non-root user (UID 1654, provided by the base image)
+- Listens on `$PORT` (Cloud Run default: 8080), fallback to 8080 if unset
+- Exposes `/health` (liveness) and `/health/ready` (readiness incl. Postgres)
+- Emits a Docker `HEALTHCHECK` on `/health` for local runs
+- Respects `X-Forwarded-Proto/For/Host` headers so the app sees the client IP + scheme through Cloud Run's proxy
+
+### Local test
+
+```bash
+make docker-build       # → gestor-financiero:local
+make docker-run         # → http://localhost:8080
+```
+
+### CI/CD (GitHub Actions → Cloud Run)
+
+`.github/workflows/ci-cd.yml` handles the pipeline:
+
+- **PRs** → restore + build + test only
+- **Push to `main`** → build, push image to Artifact Registry, deploy new Cloud Run revision, smoke-test `/health`
+- **Manual dispatch** → same as push to main (via "Run workflow" button)
+
+Auth to GCP uses **Workload Identity Federation** — no service-account JSON keys stored anywhere. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the one-time GCP setup (Artifact Registry, Secret Manager, WIF pool + provider, IAM bindings).
+
+---
+
 ## Roadmap
 
-- [ ] Session management page (list + revoke active devices)
-- [ ] Budgets CRUD (already scaffolded, empty state present)
-- [ ] Debts CRUD with amortisation
-- [ ] Dashboard chart (Chart.js or ApexCharts)
+- [x] Session management page (list + revoke active devices)
+- [x] Budgets CRUD
+- [x] Debts CRUD with interest calculation
+- [x] Dashboard with monthly metrics + comparisons
+- [x] Docker multi-stage build
+- [x] GitHub Actions CI/CD with Workload Identity Federation
 - [ ] xUnit tests + Testcontainers for integration
-- [ ] Docker multi-stage build
-- [ ] GitHub Actions CI/CD with Workload Identity Federation
 - [ ] Deploy to `gestor.alejandromontepeque.dev`
 
 ---
