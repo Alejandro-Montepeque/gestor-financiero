@@ -3,14 +3,17 @@
 
 @using System.ComponentModel.DataAnnotations
 @using System.Globalization
+@using System.Text
 @using GestorFinanciero.Application.DTOs
 @using GestorFinanciero.Application.Interfaces
 @using GestorFinanciero.Domain.Enums
 
 @inject ITransactionService TransactionService
 @inject ICategoryService CategoryService
+@inject IAppEventLogger AppEvents
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <PageTitle>Transacciones — Gestor Financiero</PageTitle>
 
@@ -22,34 +25,63 @@
                 Cada ingreso y gasto en un solo lugar.
             </MudText>
         </div>
-        <MudButton StartIcon="@Icons.Material.Filled.Add"
-                   Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   OnClick="StartCreate"
-                   Disabled="@(categoryList.Count == 0)">
-            Nueva transacción
-        </MudButton>
+        <MudStack Row Spacing="2">
+            <MudButton StartIcon="@Icons.Material.Filled.FileDownload"
+                       Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="ExportCsvAsync"
+                       Disabled="@(transactions.Count == 0 || exporting)">
+                @(exporting ? "Exportando…" : "Exportar CSV")
+            </MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="StartCreate"
+                       Disabled="@(categoryList.Count == 0)">
+                Nueva transacción
+            </MudButton>
+        </MudStack>
     </MudStack>
 
     <MudPaper Elevation="0" Class="gf-panel pa-4">
         <MudGrid Spacing="3">
-            <MudItem xs="12" sm="4" md="3">
+            <MudItem xs="12" sm="6" md="3">
                 <MudDatePicker Label="Desde"
                                Date="_fromDate"
                                DateChanged="OnFromChanged"
                                Variant="Variant.Outlined"
+                               Clearable="true"
                                Adornment="Adornment.Start"
                                AdornmentIcon="@Icons.Material.Filled.CalendarToday" />
             </MudItem>
-            <MudItem xs="12" sm="4" md="3">
+            <MudItem xs="12" sm="6" md="3">
                 <MudDatePicker Label="Hasta"
                                Date="_toDate"
                                DateChanged="OnToChanged"
                                Variant="Variant.Outlined"
+                               Clearable="true"
                                Adornment="Adornment.Start"
                                AdornmentIcon="@Icons.Material.Filled.EventBusy" />
             </MudItem>
-            <MudItem xs="12" sm="4" md="4">
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="CategoryType?"
+                           Label="Tipo"
+                           Value="filter.CategoryType"
+                           ValueChanged="OnTypeFilterChanged"
+                           Variant="Variant.Outlined"
+                           Clearable="true"
+                           Adornment="Adornment.Start"
+                           AdornmentIcon="@Icons.Material.Filled.Segment">
+                    <MudSelectItem T="CategoryType?" Value="@((CategoryType?)null)">Todos</MudSelectItem>
+                    @foreach (var t in Enum.GetValues<CategoryType>())
+                    {
+                        <MudSelectItem T="CategoryType?" Value="@((CategoryType?)t)">@TypeLabel(t)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
                 <MudSelect T="Guid?"
                            Label="Categoría"
                            Value="filter.CategoryId"
@@ -65,7 +97,48 @@
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" md="2" Class="d-flex align-items-end">
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudNumericField T="decimal?"
+                                 Label="Monto mínimo"
+                                 Value="filter.MinAmount"
+                                 ValueChanged="OnMinAmountChanged"
+                                 Variant="Variant.Outlined"
+                                 Culture="@CultureInfo.InvariantCulture"
+                                 Format="N2"
+                                 Min="0"
+                                 Clearable="true"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.ArrowUpward" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudNumericField T="decimal?"
+                                 Label="Monto máximo"
+                                 Value="filter.MaxAmount"
+                                 ValueChanged="OnMaxAmountChanged"
+                                 Variant="Variant.Outlined"
+                                 Culture="@CultureInfo.InvariantCulture"
+                                 Format="N2"
+                                 Min="0"
+                                 Clearable="true"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.ArrowDownward" />
+            </MudItem>
+
+            <MudItem xs="12" sm="8" md="4">
+                <MudTextField T="string"
+                              Label="Buscar en descripción/notas"
+                              Value="filter.Search"
+                              ValueChanged="OnSearchChanged"
+                              Variant="Variant.Outlined"
+                              Clearable="true"
+                              DebounceInterval="400"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" />
+            </MudItem>
+
+            <MudItem xs="12" sm="4" md="2" Class="d-flex align-items-end">
                 <MudButton Variant="Variant.Outlined"
                            Color="Color.Default"
                            StartIcon="@Icons.Material.Filled.FilterAltOff"
@@ -128,6 +201,21 @@
                                    OnClick="() => DeleteAsync(context)" />
                 </MudTd>
             </RowTemplate>
+            <FooterContent>
+                <MudTd colspan="5" Class="mud-text-secondary">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.caption">
+                            @transactions.Count resultado@(transactions.Count == 1 ? "" : "s")
+                        </MudText>
+                        @if (transactions.Count > 0)
+                        {
+                            <MudText Typo="Typo.caption">
+                                Total: <strong>@TotalDisplay()</strong>
+                            </MudText>
+                        }
+                    </MudStack>
+                </MudTd>
+            </FooterContent>
         </MudTable>
     </MudPaper>
 </MudStack>
@@ -223,6 +311,7 @@
     private List<TransactionDto> transactions = new();
     private List<CategoryDto> categoryList = new();
     private bool loading = true;
+    private bool exporting;
     private TransactionFilter filter = new();
 
     private DateTime? _fromDate;
@@ -273,12 +362,98 @@
         await Reload();
     }
 
+    private async Task OnTypeFilterChanged(CategoryType? type)
+    {
+        filter.CategoryType = type;
+        await Reload();
+    }
+
+    private async Task OnMinAmountChanged(decimal? min)
+    {
+        filter.MinAmount = min;
+        await Reload();
+    }
+
+    private async Task OnMaxAmountChanged(decimal? max)
+    {
+        filter.MaxAmount = max;
+        await Reload();
+    }
+
+    private async Task OnSearchChanged(string? search)
+    {
+        filter.Search = string.IsNullOrWhiteSpace(search) ? null : search;
+        await Reload();
+    }
+
     private async Task ClearFilters()
     {
         _fromDate = null;
         _toDate = null;
         filter = new TransactionFilter();
         await Reload();
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        exporting = true;
+        try
+        {
+            var rows = await TransactionService.ExportAsync(filter);
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Fecha,Tipo,Categoría,Descripción,Monto,Moneda,Notas");
+
+            foreach (var t in rows)
+            {
+                sb.Append(t.Date.ToString("yyyy-MM-dd")).Append(',');
+                sb.Append(CsvField(TypeLabel(t.CategoryType))).Append(',');
+                sb.Append(CsvField(t.CategoryName)).Append(',');
+                sb.Append(CsvField(t.Description ?? "")).Append(',');
+                sb.Append(t.Amount.ToString("F2", CultureInfo.InvariantCulture)).Append(',');
+                sb.Append(t.Currency).Append(',');
+                sb.Append(CsvField(t.Notes ?? ""));
+                sb.AppendLine();
+            }
+
+            var filename = $"transacciones-{DateTime.Now:yyyyMMdd-HHmm}.csv";
+            await JS.InvokeVoidAsync("gfDownload", filename, "text/csv", sb.ToString());
+
+            Snackbar.Add($"{rows.Count} transacciones exportadas.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Transactions", level: "Error");
+            Snackbar.Add("No pudimos exportar. Intentá de nuevo en unos segundos.", Severity.Error);
+        }
+        finally
+        {
+            exporting = false;
+        }
+    }
+
+    // CSV escape: wrap fields in quotes and double-up any inner quotes.
+    private static string CsvField(string value)
+    {
+        var needsQuoting = value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r');
+        if (!needsQuoting) return value;
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
+    }
+
+    private string TotalDisplay()
+    {
+        // Aggregate incomes as positive, expenses/debts as negative to give a net figure.
+        var currencies = transactions.GroupBy(t => t.Currency).ToList();
+        if (currencies.Count == 1)
+        {
+            var net = transactions.Sum(t => IsIncome(t.CategoryType) ? t.Amount : -t.Amount);
+            var sign = net >= 0 ? "+" : "−";
+            return $"{sign}{Math.Abs(net).ToString("N2", CultureInfo.InvariantCulture)} {currencies[0].Key}";
+        }
+
+        // Multi-currency: just show absolute sum per currency instead of a nonsense total.
+        return string.Join(" · ", currencies.Select(g =>
+            $"{g.Sum(t => t.Amount).ToString("N2", CultureInfo.InvariantCulture)} {g.Key}"));
     }
 
     private void OnEditingDateChanged(DateTime? date)
@@ -352,7 +527,8 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Transactions", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
         }
         finally
         {
@@ -380,7 +556,8 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Transactions", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
         }
     }
 

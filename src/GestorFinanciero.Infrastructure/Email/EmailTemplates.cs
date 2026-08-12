@@ -57,6 +57,93 @@ public static class EmailTemplates
             </p>
             """);
 
+    public static string ChangeEmail(string fullName, string newEmail, string confirmLink) => Layout(
+        title: "Confirmá tu nuevo email",
+        body: $"""
+            <p style='font-size:16px;line-height:1.6;margin:0 0 16px 0;'>Hola <strong>{Escape(fullName)}</strong>,</p>
+            <p style='font-size:16px;line-height:1.6;margin:0 0 16px 0;'>
+                Pediste cambiar el correo de tu cuenta a
+                <strong>{Escape(newEmail)}</strong>. Confirmá el cambio con el
+                botón de abajo — el correo anterior seguirá funcionando hasta
+                que hagas click.
+            </p>
+            <div style='margin:32px 0;text-align:center;'>
+                <a href='{Escape(confirmLink)}'
+                   style='display:inline-block;padding:12px 28px;
+                          background:#7C3AED;color:#fff;text-decoration:none;
+                          border-radius:8px;font-weight:600;'>
+                    Confirmar cambio de correo
+                </a>
+            </div>
+            <p style='font-size:14px;color:#6b7280;line-height:1.6;margin:0;'>
+                Si no fuiste vos, ignorá este mensaje. Nadie puede cambiar tu
+                correo sin acceso a este link.
+            </p>
+            """);
+
+    // ── Security notifications (fire-and-forget from Identity flows) ──
+
+    public static string PasswordChanged(string fullName, string ipAddress, string userAgent, DateTime whenUtc) => Layout(
+        title: "Tu contraseña fue cambiada",
+        body: SecurityNotice(
+            greeting:  $"Hola <strong>{Escape(fullName)}</strong>,",
+            main:      "Detectamos un <strong>cambio de contraseña</strong> en tu cuenta de Gestor Financiero. Si fuiste vos, podés ignorar este mensaje.",
+            actionCta: "Si NO fuiste vos, restablecé la contraseña ya mismo:",
+            actionUrl: "https://gestor.alejandromontepeque.dev/Account/ForgotPassword",
+            actionText:"Restablecer contraseña",
+            ipAddress: ipAddress,
+            userAgent: userAgent,
+            whenUtc:   whenUtc));
+
+    public static string EmailChanged(string fullName, string previousEmail, string newEmail, string ipAddress, string userAgent, DateTime whenUtc) => Layout(
+        title: "Tu correo fue cambiado",
+        body: SecurityNotice(
+            greeting:  $"Hola <strong>{Escape(fullName)}</strong>,",
+            main:      $"El correo de tu cuenta cambió de <strong>{Escape(previousEmail)}</strong> a <strong>{Escape(newEmail)}</strong>. Si fuiste vos, podés ignorar este mensaje.",
+            actionCta: "Si NO fuiste vos, restablecé la contraseña y contactanos:",
+            actionUrl: "https://gestor.alejandromontepeque.dev/Account/ForgotPassword",
+            actionText:"Restablecer contraseña",
+            ipAddress: ipAddress,
+            userAgent: userAgent,
+            whenUtc:   whenUtc));
+
+    public static string AccountLocked(string fullName, string ipAddress, string userAgent, DateTime whenUtc, TimeSpan lockoutDuration) => Layout(
+        title: "Cuenta bloqueada temporalmente",
+        body: SecurityNotice(
+            greeting:  $"Hola <strong>{Escape(fullName)}</strong>,",
+            main:      $"Detectamos múltiples intentos fallidos de inicio de sesión en tu cuenta. Como medida de seguridad, <strong>bloqueamos temporalmente el acceso por {(int)lockoutDuration.TotalMinutes} minutos</strong>. Si fuiste vos y olvidaste la contraseña, podés restablecerla.",
+            actionCta: "Restablecer contraseña:",
+            actionUrl: "https://gestor.alejandromontepeque.dev/Account/ForgotPassword",
+            actionText:"Restablecer contraseña",
+            ipAddress: ipAddress,
+            userAgent: userAgent,
+            whenUtc:   whenUtc));
+
+    private static string SecurityNotice(string greeting, string main, string actionCta, string actionUrl, string actionText, string ipAddress, string userAgent, DateTime whenUtc) => $"""
+        <p style='font-size:16px;line-height:1.6;margin:0 0 16px 0;'>{greeting}</p>
+        <p style='font-size:16px;line-height:1.6;margin:0 0 16px 0;'>{main}</p>
+        <table role='presentation' width='100%' style='background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;margin:16px 0;'>
+            <tr><td style='padding:12px 16px;font-size:13px;color:#9ca3af;'>
+                <div><strong style='color:#e5e7eb;'>Cuándo:</strong> {Escape(whenUtc.ToString("dd MMM yyyy — HH:mm 'UTC'"))}</div>
+                <div style='margin-top:4px;'><strong style='color:#e5e7eb;'>Desde:</strong> {Escape(ipAddress)}</div>
+                <div style='margin-top:4px;'><strong style='color:#e5e7eb;'>Dispositivo:</strong> {Escape(TruncateAgent(userAgent))}</div>
+            </td></tr>
+        </table>
+        <p style='font-size:15px;line-height:1.6;margin:0 0 16px 0;color:#e5e7eb;'>{actionCta}</p>
+        <div style='margin:16px 0 8px 0;text-align:center;'>
+            <a href='{Escape(actionUrl)}'
+               style='display:inline-block;padding:12px 28px;
+                      background:#7C3AED;color:#fff;text-decoration:none;
+                      border-radius:8px;font-weight:600;'>
+                {Escape(actionText)}
+            </a>
+        </div>
+        """;
+
+    private static string TruncateAgent(string userAgent) =>
+        string.IsNullOrWhiteSpace(userAgent) ? "—"
+        : userAgent.Length > 120 ? userAgent[..117] + "…" : userAgent;
+
     public static string PasswordReset(string fullName, string resetLink) => Layout(
         title: "Restablecer tu contraseña",
         body: $"""

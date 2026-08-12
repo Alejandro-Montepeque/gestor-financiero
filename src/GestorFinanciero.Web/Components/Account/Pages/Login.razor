@@ -5,12 +5,14 @@
 @using System.ComponentModel.DataAnnotations
 @using GestorFinanciero.Application.Interfaces
 @using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Email
 @using GestorFinanciero.Infrastructure.Identity
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 
 @inject SignInManager<AppUser> SignInManager
 @inject UserManager<AppUser> UserManager
+@inject IEmailService EmailService
 @inject IAppEventLogger AppEvents
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
@@ -154,6 +156,10 @@
             return;
         }
 
+        // Snapshot lockout state so we can detect the transition from "not
+        // locked" → "locked" and send the security alert only once per lockout.
+        var wasAlreadyLocked = await UserManager.IsLockedOutAsync(user);
+
         var result = await SignInManager.PasswordSignInAsync(
             user, Input.Password, Input.RememberMe, lockoutOnFailure: true);
 
@@ -187,6 +193,29 @@
 
         if (result.IsLockedOut)
         {
+            // If this attempt is the one that triggered the lockout, notify the
+            // account owner via email. Skip if the account was already locked
+            // (they'd get spammed on every retry inside the 15-min window).
+            if (!wasAlreadyLocked)
+            {
+                try
+                {
+                    var lockDuration = TimeSpan.FromMinutes(15); // matches Lockout.DefaultLockoutTimeSpan
+                    var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "—";
+                    var ua = HttpContext.Request.Headers.UserAgent.ToString();
+                    await EmailService.SendAsync(
+                        user.Email!,
+                        "Cuenta bloqueada temporalmente — Gestor Financiero",
+                        EmailTemplates.AccountLocked(user.FullName, ip, ua, DateTime.UtcNow, lockDuration));
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to send account-locked alert to {Email}", user.Email);
+                    await AppEvents.LogExceptionAsync(ex, EventModules.AuthLogin, level: EventLevels.Warning,
+                        userId: user.Id, userEmail: user.Email);
+                }
+            }
+
             RedirectManager.RedirectTo("Account/Lockout");
             return;
         }
