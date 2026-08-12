@@ -34,11 +34,20 @@ public sealed class TransactionUpsertDto
     public string? Notes { get; set; }
 }
 
-/// <summary>Simple filter args for the list page (date range + optional category).</summary>
+/// <summary>Filter args for the list page: date range, category, category type,
+/// amount range, and a free-text search over description/notes.</summary>
 public sealed class TransactionFilter
 {
     public DateOnly? From { get; set; }
     public DateOnly? To { get; set; }
     public Guid? CategoryId { get; set; }
+    public CategoryType? CategoryType { get; set; }
+    public decimal? MinAmount { get; set; }
+    public decimal? MaxAmount { get; set; }
+
+    /// <summary>Case-insensitive substring match over Description + Notes.</summary>
+    public string? Search { get; set; }
+
+    /// <summary>Cap for the result set. Enforced server-side (max 500).</summary>
     public int Take { get; set; } = 100;
 }

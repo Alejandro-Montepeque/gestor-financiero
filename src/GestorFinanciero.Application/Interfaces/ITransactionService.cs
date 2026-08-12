@@ -10,6 +10,9 @@ public interface ITransactionService
 {
     Task<IReadOnlyList<TransactionDto>> ListAsync(TransactionFilter filter, CancellationToken ct = default);
 
+    /// <summary>Export up to 10 000 rows respecting the same filters as <see cref="ListAsync"/>.</summary>
+    Task<IReadOnlyList<TransactionDto>> ExportAsync(TransactionFilter filter, CancellationToken ct = default);
+
     Task<TransactionDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     Task<TransactionDto> CreateAsync(TransactionUpsertDto input, CancellationToken ct = default);
