@@ -26,9 +26,29 @@ DotEnv.Load(new DotEnvOptions(
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ─── Cloud Run: honor the $PORT env var if set (default is 8080). Cloud
+//     Run injects it at cold-start; the container must listen on that port
+//     or the deploy fails healthchecks. Falls through to ASPNETCORE_URLS
+//     when PORT is unset, so local dev/dotnet-watch keeps working.
+// ────────────────────────────────────────────────────────────────────────
+if (int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var runtimePort))
+{
+    builder.WebHost.ConfigureKestrel(o => o.ListenAnyIP(runtimePort));
+}
+
 // ─── Blazor Server ──────────────────────────────────────────────────────
+// DetailedErrors=true forwards the server-side exception message back to the
+// browser instead of the generic "unhandled exception on the current circuit".
+// Enable it via env var when debugging containerised runs.
+var blazorDetailedErrors =
+    string.Equals(Environment.GetEnvironmentVariable("BLAZOR_DETAILED_ERRORS"), "true", StringComparison.OrdinalIgnoreCase)
+    || builder.Environment.IsDevelopment();
+
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        options.DetailedErrors = blazorDetailedErrors;
+    });
 
 // ─── MudBlazor (dialogs, snackbar, popover, resize watcher) ─────────────
 builder.Services.AddMudServices();
@@ -111,6 +131,32 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+// ─── Health checks (Cloud Run + Docker HEALTHCHECK) ─────────────────────
+// /health/live  → cheap liveness probe (no DB round-trip)
+// /health/ready → readiness probe including DB connectivity
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<GestorFinanciero.Infrastructure.Persistence.AppDbContext>(
+        name: "postgres",
+        tags: new[] { "ready" });
+
+// ─── Forwarded headers — trust Cloud Run / reverse-proxy headers so the
+// app sees the original scheme (https), remote IP and host. Critical for
+// the per-IP rate limiter and for correct absolute URL generation in emails.
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor |
+        Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto |
+        Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost;
+
+    // Cloud Run's proxy is on a wide range of GCP internal IPs; clearing the
+    // known-networks/proxies lists is the platform-agnostic way to accept
+    // forwarded headers from any hop. The alternative would be maintaining
+    // Google's IP allowlist here.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 
 // ─── Startup seeders (run pending ISeeders once per environment) ────────
@@ -137,7 +183,19 @@ if (!app.Environment.IsDevelopment())
 app.UseSecurityHeaders(app.Environment);
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+
+// Consume the forwarded headers configured above BEFORE any middleware that
+// reads the request scheme/host/IP (auth cookies, rate limiter, redirects).
+app.UseForwardedHeaders();
+
+// Skip HTTPS redirect when running inside a container — Cloud Run terminates
+// TLS at the edge and forwards plain HTTP to us, so a redirect either loops
+// or fails ("Failed to determine the https port"). Kestrel still sees the
+// original scheme (https) via the forwarded headers above.
+if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -147,6 +205,20 @@ app.UseRateLimiter();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// ─── Health probes (Cloud Run + Docker HEALTHCHECK) ────────────────────
+// `/health` = simple liveness (no dependencies checked → won't 503 on DB blips).
+// `/health/ready` = readiness (includes Postgres). Cloud Run uses this to know
+// when it can start routing traffic.
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    // Skip DB checks so a hiccup doesn't take the container out of rotation.
+    Predicate = _ => false,
+});
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+});
 
 // ─── Logout endpoint (POST, so no CSRF-by-navigation) ───────────────────
 app.MapPost("/Account/Logout", async (

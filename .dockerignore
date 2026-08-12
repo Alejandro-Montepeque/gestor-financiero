@@ -1,0 +1,59 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Docker build context filter — keep only what the multi-stage build needs.
+# Everything listed here is excluded from `docker build` context.
+# ═══════════════════════════════════════════════════════════════════════
+
+# Build outputs — they'll be regenerated inside the container
+**/bin
+**/obj
+**/*.user
+**/publish/
+**/out/
+**/artifacts/
+
+# IDE / editor artifacts
+.vs/
+.vscode/
+.idea/
+*.suo
+*.swp
+*.swo
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Local secrets — MUST NEVER end up in an image
+.env
+.env.*
+!.env.example
+*.pfx
+*.key
+*.pem
+
+# Tests (not needed for production image; CI runs them separately)
+tests/
+
+# Documentation (only README.md gets included when useful)
+*.md
+docs/
+
+# Package manager caches
+node_modules/
+.nuget/
+.dotnet/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docker files themselves — no self-reference needed
+Dockerfile*
+compose.yml
+docker-compose*.yml
+
+# Misc project files not needed at runtime
+Makefile
+.editorconfig

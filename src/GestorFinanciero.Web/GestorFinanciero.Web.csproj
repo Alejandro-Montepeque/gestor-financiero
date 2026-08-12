@@ -20,6 +20,9 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
 
+    <!-- Health check para EF Core — expone /health/ready con verificación de DB. -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.10" />
+
     <!-- MudBlazor: Material Design component library for Blazor. -->
     <PackageReference Include="MudBlazor" Version="9.8.0" />
 

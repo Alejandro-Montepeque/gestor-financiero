@@ -134,13 +134,41 @@ secrets-clear: ## Borrar TODOS los user-secrets (⚠️ irreversible en la sesi�
 #  🚀  Deploy shortcuts (después que agreguemos Docker + CI)
 # ═══════════════════════════════════════════════════════════════════════
 
-docker-build: ## Build de la imagen Docker localmente
-	@docker build -t gestor-financiero:local .
+# Nombre + tag de la imagen (override: make docker-build IMAGE=xxx:tag)
+IMAGE ?= gestor-financiero:local
 
-docker-run: ## Correr el container localmente (require ConnectionStrings__Default env)
-	@docker run --rm -p 8080:8080 \
-		-e "ConnectionStrings__Default=$$CONNECTION_STRING" \
-		gestor-financiero:local
+docker-build: ## Build de la imagen Docker localmente
+	@echo "🐳 Building $(IMAGE)..."
+	@docker build -t $(IMAGE) .
+	@echo "✅ Imagen $(IMAGE) lista."
+	@docker images $(IMAGE) --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}"
+
+docker-rebuild: ## Build FORZADO sin cache (usar cuando algo raro pasa en runtime)
+	@echo "🐳 Rebuilding $(IMAGE) from scratch (no cache)..."
+	@docker build --no-cache --pull -t $(IMAGE) .
+	@echo "✅ Imagen $(IMAGE) lista."
+	@docker images $(IMAGE) --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}"
+
+docker-run: ## Correr el container en http://localhost:8080 (lee .env)
+	@if [ ! -f .env ]; then \
+		echo "❌ Falta .env — corré 'make env-init' primero."; exit 1; \
+	fi
+	@echo "🐳 Corriendo $(IMAGE) en :8080..."
+	@docker run --rm -it \
+		--name gestor-financiero \
+		-p 8080:8080 \
+		--env-file .env \
+		-e ASPNETCORE_ENVIRONMENT=Production \
+		$(IMAGE)
+
+docker-shell: ## Abrir shell dentro del container (para debug)
+	@docker run --rm -it --entrypoint /bin/sh $(IMAGE)
+
+docker-scan: ## Scan de vulnerabilidades con docker scout (requiere docker desktop)
+	@docker scout cves $(IMAGE) 2>/dev/null || echo "ℹ️  docker scout no disponible — instalá Docker Desktop o probá 'trivy image $(IMAGE)'"
+
+docker-clean: ## Borrar la imagen local
+	@docker rmi $(IMAGE) 2>/dev/null || echo "ℹ️  Imagen $(IMAGE) no existe."
 
 # ═══════════════════════════════════════════════════════════════════════
 #  📖  Help
@@ -164,4 +192,4 @@ help: ## Mostrar esta ayuda
 	migrate migrate-list migrate-new migrate-remove migrate-rollback migrate-reset \
 	seed-list seed-reset-hint \
 	secrets secrets-set secrets-clear \
-	docker-build docker-run
+	docker-build docker-rebuild docker-run docker-shell docker-scan docker-clean
