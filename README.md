@@ -151,13 +151,43 @@ make setup
 dotnet restore
 ```
 
+### Configure environment (`.env`)
+
+The `make setup` step above already copied `.env.example` into `.env`. Open it and fill in the real values.
+
+```bash
+# Same as running it manually:
+make env-init
+```
+
+Minimum required keys:
+
+| Variable                     | Example / notes                                            |
+| ---------------------------- | ---------------------------------------------------------- |
+| `ASPNETCORE_ENVIRONMENT`     | `Development` for local, `Production` for Cloud Run        |
+| `ConnectionStrings__Default` | Neon direct URL (**not** pooled) — needed for migrations   |
+| `Smtp__UseFakeSender`        | `true` = log emails to console; `false` = real SMTP        |
+| `Smtp__Host` … `Smtp__FromAddress` | Only needed when `UseFakeSender=false`               |
+
+Notice the **double underscore** in variable names — ASP.NET Core turns that into the config key separator (`:`). So `ConnectionStrings__Default` in the file becomes `configuration["ConnectionStrings:Default"]` in code.
+
+**Configuration precedence** (highest wins):
+
+1. Real environment variables (Cloud Run, Docker)
+2. `.env` file (local dev)
+3. User Secrets (`dotnet user-secrets`, still supported)
+4. `appsettings.{Environment}.json`
+5. `appsettings.json`
+
+You can mix and match — for instance, keep secret values in `.env` and non-sensitive overrides in `appsettings.Development.json`.
+
 ### Configure the database
 
-1. Create a Neon project (Postgres 17). Copy the **direct** connection URL — NOT the pooled one — from the Neon console.
-2. Store it in User Secrets:
+1. Create a Neon project (Postgres 17). Copy the **direct** connection URL from the Neon console.
+2. Set it in your `.env`:
 
-   ```bash
-   make secrets-set KEY="ConnectionStrings:Default" VALUE="postgresql://user:pass@host/db?sslmode=require"
+   ```
+   ConnectionStrings__Default=postgresql://user:pass@host.neon.tech/db?sslmode=require
    ```
 
 3. Apply the initial migrations:
@@ -183,16 +213,16 @@ By default the SMTP sender runs in **fake mode** — emails are dumped to the co
 
 1. Turn on 2-Step Verification for your Google account.
 2. Generate an App Password at <https://myaccount.google.com/apppasswords>.
-3. Set the secrets:
+3. Edit `.env`:
 
-   ```bash
-   make secrets-set KEY="Smtp:UseFakeSender" VALUE="false"
-   make secrets-set KEY="Smtp:Host"          VALUE="smtp.gmail.com"
-   make secrets-set KEY="Smtp:Port"          VALUE="587"
-   make secrets-set KEY="Smtp:Username"      VALUE="your@gmail.com"
-   make secrets-set KEY="Smtp:Password"      VALUE="16-char-app-password"
-   make secrets-set KEY="Smtp:FromName"      VALUE="Gestor Financiero"
-   make secrets-set KEY="Smtp:FromAddress"   VALUE="your@gmail.com"
+   ```
+   Smtp__UseFakeSender=false
+   Smtp__Host=smtp.gmail.com
+   Smtp__Port=587
+   Smtp__Username=your@gmail.com
+   Smtp__Password=16-char-app-password
+   Smtp__FromName=Gestor Financiero
+   Smtp__FromAddress=your@gmail.com
    ```
 
 ---

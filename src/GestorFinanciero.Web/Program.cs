@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using dotenv.net;
 using GestorFinanciero.Application.Interfaces;
 using GestorFinanciero.Domain.Constants;
 using GestorFinanciero.Infrastructure;
@@ -12,6 +13,16 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using MudBlazor.Services;
+
+// ─── Load .env (if present) BEFORE creating the builder so IConfiguration
+//     picks the values up as environment variables. Precedence stays intact:
+//     env vars > user-secrets > appsettings.{Environment}.json > appsettings.json.
+// ────────────────────────────────────────────────────────────────────────
+DotEnv.Load(new DotEnvOptions(
+    ignoreExceptions: true,          // no .env file? no problem — user-secrets and env vars still work
+    envFilePaths: [".env"],          // look in the current working directory
+    overwriteExistingVars: false,    // real env vars (from Cloud Run, Docker) always win
+    trimValues: true));
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,6 +48,32 @@ builder.Services.AddAuthentication(options =>
     options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
 })
 .AddIdentityCookies();
+
+// ─── Cookie hardening + idle timeout ────────────────────────────────────
+// Runs AFTER AddIdentityCookies() so we override Identity's defaults for the
+// two cookies it registers: Application (the login session) and External
+// (the OAuth handshake). Session gets a rolling 60-minute idle timeout.
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.Name        = ".gf.auth";
+    options.Cookie.HttpOnly    = true;
+    options.Cookie.SameSite    = SameSiteMode.Lax;      // Lax needed for OAuth-style redirects
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+
+    options.ExpireTimeSpan = TimeSpan.FromMinutes(60);  // idle timeout
+    options.SlidingExpiration = true;                    // reset on activity
+    options.LoginPath  = "/Account/Login";
+    options.LogoutPath = "/Account/Logout";
+    options.AccessDeniedPath = "/Account/AccessDenied";
+});
+
+builder.Services.ConfigureExternalCookie(options =>
+{
+    options.Cookie.HttpOnly     = true;
+    options.Cookie.SameSite     = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.ExpireTimeSpan      = TimeSpan.FromMinutes(15);
+});
 
 builder.Services.AddAuthorization();
 
@@ -95,6 +132,9 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
+
+// Adds CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, etc.
+app.UseSecurityHeaders(app.Environment);
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();

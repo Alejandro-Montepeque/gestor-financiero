@@ -22,6 +22,9 @@
 
     <!-- MudBlazor: Material Design component library for Blazor. -->
     <PackageReference Include="MudBlazor" Version="9.8.0" />
+
+    <!-- dotenv.net: load .env files into environment variables at startup. -->
+    <PackageReference Include="dotenv.net" Version="3.2.1" />
   </ItemGroup>
 
 </Project>

@@ -24,7 +24,16 @@ setup: ## Instalar dotnet-ef, user-secrets, y trustear el cert HTTPS
 	@dotnet tool install --global dotnet-user-secrets 2>/dev/null || dotnet tool update --global dotnet-user-secrets
 	@echo "🔒 Trusteando cert HTTPS local..."
 	@dotnet dev-certs https --trust
+	@$(MAKE) --no-print-directory env-init
 	@echo "✅ Setup listo."
+
+env-init: ## Crear .env a partir de .env.example (no sobrescribe si ya existe)
+	@if [ -f .env ]; then \
+		echo "ℹ️  .env ya existe — no se toca."; \
+	else \
+		cp .env.example .env; \
+		echo "📄 .env creado. Editalo con tus valores (DB, SMTP)."; \
+	fi
 
 restore: ## Restaurar packages NuGet
 	@dotnet restore
@@ -151,7 +160,7 @@ help: ## Mostrar esta ayuda
 		$(MAKEFILE_LIST)
 	@echo ""
 
-.PHONY: help setup restore build check dev run test clean \
+.PHONY: help setup env-init restore build check dev run test clean \
 	migrate migrate-list migrate-new migrate-remove migrate-rollback migrate-reset \
 	seed-list seed-reset-hint \
 	secrets secrets-set secrets-clear \
