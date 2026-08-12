@@ -321,7 +321,21 @@ make docker-run         # → http://localhost:8080
 - **Push to `main`** → build, push image to Artifact Registry, deploy new Cloud Run revision, smoke-test `/health`
 - **Manual dispatch** → same as push to main (via "Run workflow" button)
 
-Auth to GCP uses **Workload Identity Federation** — no service-account JSON keys stored anywhere. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the one-time GCP setup (Artifact Registry, Secret Manager, WIF pool + provider, IAM bindings).
+Auth to GCP uses **Workload Identity Federation** — no service-account JSON keys stored anywhere.
+
+The workflow expects these GitHub Actions **Variables** (Settings → Secrets and variables → Actions → Variables):
+
+| Variable            | Example                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GCP_PROJECT_ID`    | `gestor-financiero-prod`                                                                             |
+| `GCP_REGION`        | `us-central1`                                                                                        |
+| `GCP_WIF_PROVIDER`  | `projects/123456/locations/global/workloadIdentityPools/github-actions/providers/github`             |
+| `GCP_DEPLOYER_SA`   | `gestor-financiero-deployer@PROJECT.iam.gserviceaccount.com`                                         |
+| `GCP_RUNTIME_SA`    | `gestor-financiero-runtime@PROJECT.iam.gserviceaccount.com`                                          |
+| `GCP_ARTIFACT_REPO` | `gestor-financiero`                                                                                  |
+| `CLOUD_RUN_SERVICE` | `gestor-financiero`                                                                                  |
+
+And two secrets in **GCP Secret Manager** (referenced by the deploy step): `neon-connection-string` and `smtp-password`.
 
 ---
 
