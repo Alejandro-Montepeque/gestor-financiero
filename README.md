@@ -1,8 +1,6 @@
 # Gestor Financiero
 
-Personal finance web application: track income, expenses, categories and monthly budgets. Modern rebuild of an academic .NET Framework 4.7.2 project, now on .NET 10 with Clean Architecture, MudBlazor UI, PostgreSQL, and a full production-grade auth stack.
-
-> **Status:** MVP feature-complete. Deployment to Google Cloud Run pending (see roadmap).
+Personal finance web application: track income, expenses, categories, budgets and debts. Modern rebuild of an academic .NET Framework 4.7.2 project, now on .NET 10 with Clean Architecture, MudBlazor UI, PostgreSQL, and a full production-grade auth stack.
 
 ---
 
@@ -47,16 +45,6 @@ Personal finance web application: track income, expenses, categories and monthly
 | Integration      | xUnit + Testcontainers (planned)        |
 | Component tests  | bUnit (planned)                         |
 
-### DevOps (planned)
-
-| Layer            | Technology                              |
-| ---------------- | --------------------------------------- |
-| Container        | Docker multi-stage                      |
-| Runtime target   | Google Cloud Run                        |
-| Registry         | Google Artifact Registry                |
-| CI/CD            | GitHub Actions + Workload Identity Fed. |
-| DNS + SSL        | Cloudflare + Cloud Run managed cert     |
-
 ---
 
 ## Architecture
@@ -83,24 +71,39 @@ Dependencies point inwards: `Web` → `Infrastructure` → `Application` → `Do
 
 ### Auth & security
 
-- Register with email verification (mandatory before login)
+- Register with email verification via a 6-digit code (mandatory before login)
 - Login with email + password
 - Forgot password → email link → reset
 - Password strength meter (client-side, no server round-trip)
+- Show/hide password toggle on every password field
 - Have I Been Pwned check — rejects passwords seen in public breaches
-- Account lockout after 5 failed attempts
+- Account lockout after 5 failed attempts (15-minute cooldown)
 - IP-based rate limiting (5 login attempts/min, 3 register/5 min)
 - Security-stamp revalidation every 30 min
 - Audit trail of every auth event in the `app_events` table
 - Generic error messages (protection against account enumeration)
 - Anti-forgery tokens on every form
+- Security notification emails (password change, email change, account lockout)
+- CSP + HSTS + X-Frame-Options + Permissions-Policy headers
+
+### Account management
+
+- Editable profile (full name, preferred currency)
+- Change email with confirmation link to the new address
+- Change password with old-password verification + HIBP check
+- Active session view with IP + user-agent
+- "Sign out from all devices" via SecurityStamp rotation
+- Delete account (password + confirmation) with EF Core cascade
 
 ### Finance
 
 - Categories: 5 types (Income, Savings, Fixed expense, Variable expense, Debt)
 - 5 default categories seeded per user on registration
 - Transactions: amount + currency, date, category, description, notes
-- Filters by date range and category
+- Filters: date range, category, type, amount range, free-text search
+- CSV export respecting the current filters
+- Budgets: monthly estimated-vs-actual per category with progress bars
+- Debts: register a debt with APR, apply payments with interest auto-computed since the last payment
 - Multi-currency support via `Money` value object
 
 ### Dashboard
@@ -121,10 +124,9 @@ Dependencies point inwards: `Web` → `Infrastructure` → `Application` → `Do
 ### DX
 
 - Makefile with `artisan`-style commands (see below)
-- User Secrets for local configuration
+- `.env` file support via dotenv.net + User Secrets for local overrides
 - Fake SMTP mode logs emails to console instead of sending
 - Seeder framework tracks execution so each seeder runs once per environment
-- Two separate migrations for the initial schema and the unified event log
 
 ---
 
@@ -134,7 +136,6 @@ Dependencies point inwards: `Web` → `Infrastructure` → `Application` → `Do
 
 - macOS, Linux or Windows
 - .NET 10 SDK
-- Docker Desktop (for future Postgres via Testcontainers; not required today)
 - A Neon PostgreSQL project (free tier) or any Postgres 17
 
 ### One-time setup
@@ -164,7 +165,7 @@ Minimum required keys:
 
 | Variable                     | Example / notes                                            |
 | ---------------------------- | ---------------------------------------------------------- |
-| `ASPNETCORE_ENVIRONMENT`     | `Development` for local, `Production` for Cloud Run        |
+| `ASPNETCORE_ENVIRONMENT`     | `Development` for local                                    |
 | `ConnectionStrings__Default` | Neon direct URL (**not** pooled) — needed for migrations   |
 | `Smtp__UseFakeSender`        | `true` = log emails to console; `false` = real SMTP        |
 | `Smtp__Host` … `Smtp__FromAddress` | Only needed when `UseFakeSender=false`               |
@@ -173,13 +174,11 @@ Notice the **double underscore** in variable names — ASP.NET Core turns that i
 
 **Configuration precedence** (highest wins):
 
-1. Real environment variables (Cloud Run, Docker)
+1. Real environment variables
 2. `.env` file (local dev)
-3. User Secrets (`dotnet user-secrets`, still supported)
+3. User Secrets (`dotnet user-secrets`)
 4. `appsettings.{Environment}.json`
 5. `appsettings.json`
-
-You can mix and match — for instance, keep secret values in `.env` and non-sensitive overrides in `appsettings.Development.json`.
 
 ### Configure the database
 
@@ -271,22 +270,6 @@ Seeders run automatically at startup and each one is recorded in `seeder_executi
 | `make secrets-set KEY="path" VALUE="value"`          | Set a secret                      |
 | `make secrets-clear`                                 | Delete every secret               |
 
-### Docker
-
-| Command             | Description                                                                    |
-| ------------------- | ------------------------------------------------------------------------------ |
-| `make docker-build` | Build the multi-stage image (`gestor-financiero:local` by default)             |
-| `make docker-run`   | Run the container on `:8080` reading env from `.env`                           |
-| `make docker-shell` | Open an `sh` inside the image for debugging                                    |
-| `make docker-scan`  | Run `docker scout cves` against the image                                      |
-| `make docker-clean` | Delete the local image                                                         |
-
-Override the image tag with `IMAGE=…`:
-
-```bash
-make docker-build IMAGE=us-central1-docker.pkg.dev/PROJECT/gf/app:v1.0.0
-```
-
 ### Help
 
 | Command      | Description                              |
@@ -295,60 +278,16 @@ make docker-build IMAGE=us-central1-docker.pkg.dev/PROJECT/gf/app:v1.0.0
 
 ---
 
-## Deployment
-
-The app targets Google Cloud Run. The `Dockerfile` is a two-stage build (SDK 10 → ASP.NET runtime, Debian slim base) that:
-
-- Restores + publishes the Web project with cached layers
-- Runs as a non-root user (UID 1654, provided by the base image)
-- Listens on `$PORT` (Cloud Run default: 8080), fallback to 8080 if unset
-- Exposes `/health` (liveness) and `/health/ready` (readiness incl. Postgres)
-- Emits a Docker `HEALTHCHECK` on `/health` for local runs
-- Respects `X-Forwarded-Proto/For/Host` headers so the app sees the client IP + scheme through Cloud Run's proxy
-
-### Local test
-
-```bash
-make docker-build       # → gestor-financiero:local
-make docker-run         # → http://localhost:8080
-```
-
-### CI/CD (GitHub Actions → Cloud Run)
-
-`.github/workflows/ci-cd.yml` handles the pipeline:
-
-- **PRs** → restore + build + test only
-- **Push to `main`** → build, push image to Artifact Registry, deploy new Cloud Run revision, smoke-test `/health`
-- **Manual dispatch** → same as push to main (via "Run workflow" button)
-
-Auth to GCP uses **Workload Identity Federation** — no service-account JSON keys stored anywhere.
-
-The workflow expects these GitHub Actions **Variables** (Settings → Secrets and variables → Actions → Variables):
-
-| Variable            | Example                                                                                              |
-| ------------------- | ---------------------------------------------------------------------------------------------------- |
-| `GCP_PROJECT_ID`    | `gestor-financiero-prod`                                                                             |
-| `GCP_REGION`        | `us-central1`                                                                                        |
-| `GCP_WIF_PROVIDER`  | `projects/123456/locations/global/workloadIdentityPools/github-actions/providers/github`             |
-| `GCP_DEPLOYER_SA`   | `gestor-financiero-deployer@PROJECT.iam.gserviceaccount.com`                                         |
-| `GCP_RUNTIME_SA`    | `gestor-financiero-runtime@PROJECT.iam.gserviceaccount.com`                                          |
-| `GCP_ARTIFACT_REPO` | `gestor-financiero`                                                                                  |
-| `CLOUD_RUN_SERVICE` | `gestor-financiero`                                                                                  |
-
-And two secrets in **GCP Secret Manager** (referenced by the deploy step): `neon-connection-string` and `smtp-password`.
-
----
-
 ## Roadmap
 
-- [x] Session management page (list + revoke active devices)
-- [x] Budgets CRUD
-- [x] Debts CRUD with interest calculation
+- [x] Auth: register with 6-digit code + login + forgot password + email verification
+- [x] Categories, Transactions, Budgets, Debts CRUD
 - [x] Dashboard with monthly metrics + comparisons
-- [x] Docker multi-stage build
-- [x] GitHub Actions CI/CD with Workload Identity Federation
+- [x] Account management (profile, email, password, sessions, delete)
+- [x] Security notifications by email
+- [x] Responsive layout across all pages
 - [ ] xUnit tests + Testcontainers for integration
-- [ ] Deploy to `gestor.alejandromontepeque.dev`
+- [ ] bUnit component tests
 
 ---
 
