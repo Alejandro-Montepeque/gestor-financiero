@@ -1,0 +1,25 @@
+@page "/Account/RegisterConfirmation"
+@layout AuthLayout
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+
+<PageTitle>Revisá tu correo — Gestor Financiero</PageTitle>
+
+<MudPaper Elevation="4" Class="auth-card pa-8 text-center">
+    <MudIcon Icon="@Icons.Material.Filled.MarkEmailUnread" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+    <MudText Typo="Typo.h5" Class="mb-2">¡Cuenta creada!</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2" Style="max-width:400px;margin:0 auto">
+        Te mandamos un link a <strong>@Email</strong> para confirmar tu email.
+        Podés iniciar sesión una vez que hagas click en él.
+    </MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-6" Style="max-width:400px;margin:0 auto">
+        Si no llega en unos minutos, revisá la carpeta de spam.
+    </MudText>
+    <MudButton Href="Account/Login" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login">
+        Ir al login
+    </MudButton>
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery(Name = "email")]
+    private string? Email { get; set; }
+}

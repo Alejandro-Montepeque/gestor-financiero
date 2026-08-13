@@ -1,0 +1,16 @@
+@page "/Account/AccessDenied"
+@layout AuthLayout
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+
+<PageTitle>Acceso denegado</PageTitle>
+
+<MudPaper Elevation="4" Class="auth-card pa-8 text-center">
+    <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Error" Size="Size.Large" Class="mb-3" />
+    <MudText Typo="Typo.h5" Class="mb-2">Acceso denegado</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">
+        No tenés permiso para ver esta página.
+    </MudText>
+    <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Home">
+        Volver al inicio
+    </MudButton>
+</MudPaper>

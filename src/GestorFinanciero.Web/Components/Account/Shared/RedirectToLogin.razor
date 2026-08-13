@@ -1,0 +1,13 @@
+@* Redirects unauthenticated users to the login page, preserving the current
+   URL as the returnUrl so they're brought back after signing in. Used from
+   Routes.razor's <NotAuthorized /> block. *@
+
+@inject NavigationManager NavigationManager
+
+@code {
+    protected override void OnInitialized()
+    {
+        var returnUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.NavigateTo($"Account/Login?ReturnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+    }
+}

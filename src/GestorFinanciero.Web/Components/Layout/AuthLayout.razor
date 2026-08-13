@@ -1,0 +1,26 @@
+@inherits LayoutComponentBase
+
+@* Static-SSR-friendly layout used by /Account/Login, /Account/Register, /Account/AccessDenied.
+   No interactivity here so the form POSTs and the IdentityRedirectManager can work in pure
+   static rendering. Just a centred card on a full-height gradient. *@
+
+<MudThemeProvider Theme="AppTheme.Instance" IsDarkMode="true" />
+
+<div class="auth-bg">
+    <div class="auth-branding">
+        <MudText Typo="Typo.h4" Class="gf-brand mb-2">Gestor Financiero</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Tomá control de tus finanzas personales.
+        </MudText>
+    </div>
+
+    <div class="auth-content">
+        @Body
+    </div>
+
+    <div class="auth-footer">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            © @DateTime.UtcNow.Year Alejandro Montepeque
+        </MudText>
+    </div>
+</div>

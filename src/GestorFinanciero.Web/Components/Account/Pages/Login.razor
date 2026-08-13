@@ -1,0 +1,238 @@
+@page "/Account/Login"
+@layout AuthLayout
+@attribute [Microsoft.AspNetCore.Components.ExcludeFromInteractiveRouting]
+
+@using System.ComponentModel.DataAnnotations
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Constants
+@using GestorFinanciero.Infrastructure.Email
+@using GestorFinanciero.Infrastructure.Identity
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Identity
+
+@inject SignInManager<AppUser> SignInManager
+@inject UserManager<AppUser> UserManager
+@inject IEmailService EmailService
+@inject IAppEventLogger AppEvents
+@inject ILogger<Login> Logger
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Iniciar sesión — Gestor Financiero</PageTitle>
+
+<MudPaper Elevation="4" Class="auth-card pa-8" Square="false">
+    <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet"
+                 Color="Color.Primary"
+                 Size="Size.Large" />
+        <div>
+            <MudText Typo="Typo.h5">Iniciar sesión</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Continuá donde lo dejaste.
+            </MudText>
+        </div>
+    </MudStack>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4" Dense="true">
+            @errorMessage
+        </MudAlert>
+    }
+
+    <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
+        <DataAnnotationsValidator />
+
+        <MudStack Spacing="4">
+            <MudTextField T="string"
+                          Label="Correo electrónico"
+                          @bind-Value="Input.Email"
+                          For="() => Input.Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Email"
+                          UserAttributes="@_emailAttrs" />
+
+            <div class="gf-password-field">
+                <MudTextField T="string"
+                              Label="Contraseña"
+                              @bind-Value="Input.Password"
+                              For="() => Input.Password"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Password"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Lock"
+                              UserAttributes="@_passwordAttrs" />
+                <button type="button"
+                        class="gf-password-toggle"
+                        data-toggle-password="login-password"
+                        aria-label="Mostrar contraseña"
+                        tabindex="-1">
+                    <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg class="icon-eye-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+            </div>
+
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudCheckBox T="bool" @bind-Value="Input.RememberMe" Color="Color.Primary" Label="Recordarme" />
+                <MudLink Href="Account/ForgotPassword" Underline="Underline.Hover" Typo="Typo.body2">
+                    ¿Olvidaste tu contraseña?
+                </MudLink>
+            </MudStack>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.Login"
+                       FullWidth="true">
+                Entrar
+            </MudButton>
+        </MudStack>
+    </EditForm>
+
+    <MudDivider Class="my-6" />
+
+    <MudStack Row Justify="Justify.Center" Spacing="1">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">¿Sin cuenta?</MudText>
+        <MudLink Href="Account/Register" Underline="Underline.Hover">Registrate acá</MudLink>
+    </MudStack>
+</MudPaper>
+
+@code {
+    private const string GenericErrorMessage = "Correo o contraseña incorrectos.";
+
+    private string? errorMessage;
+
+    private readonly Dictionary<string, object?> _emailAttrs = new()
+    {
+        ["autocomplete"] = "username",
+        ["name"] = "Input.Email",
+    };
+
+    private readonly Dictionary<string, object?> _passwordAttrs = new()
+    {
+        ["autocomplete"] = "current-password",
+        ["name"] = "Input.Password",
+        ["id"] = "login-password",
+    };
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        }
+    }
+
+    public async Task LoginUser()
+    {
+        var email = Input.Email.Trim();
+        var user = await UserManager.FindByEmailAsync(email);
+
+        if (user is null)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthLogin,
+                action: EventActions.Failed,
+                message: "Login attempt for non-existent account.",
+                level: EventLevels.Warning,
+                failureReason: "user_not_found",
+                userEmail: email);
+
+            errorMessage = GenericErrorMessage;
+            return;
+        }
+
+        // Snapshot lockout state so we can detect the transition from "not
+        // locked" → "locked" and send the security alert only once per lockout.
+        var wasAlreadyLocked = await UserManager.IsLockedOutAsync(user);
+
+        var result = await SignInManager.PasswordSignInAsync(
+            user, Input.Password, Input.RememberMe, lockoutOnFailure: true);
+
+        if (result.Succeeded)
+        {
+            await AppEvents.LogAsync(
+                module: EventModules.AuthLogin,
+                action: EventActions.Success,
+                message: "Login OK.",
+                userId: user.Id,
+                userEmail: email);
+
+            Logger.LogInformation("User logged in.");
+            RedirectManager.RedirectTo(ReturnUrl);
+            return;
+        }
+
+        var reason = result.IsLockedOut       ? "locked_out"
+                   : result.IsNotAllowed      ? "not_allowed"
+                   : result.RequiresTwoFactor ? "requires_two_factor"
+                   : "wrong_password";
+
+        await AppEvents.LogAsync(
+            module: EventModules.AuthLogin,
+            action: EventActions.Failed,
+            message: $"Login failed ({reason}).",
+            level: EventLevels.Warning,
+            failureReason: reason,
+            userId: user.Id,
+            userEmail: email);
+
+        if (result.IsLockedOut)
+        {
+            // If this attempt is the one that triggered the lockout, notify the
+            // account owner via email. Skip if the account was already locked
+            // (they'd get spammed on every retry inside the 15-min window).
+            if (!wasAlreadyLocked)
+            {
+                try
+                {
+                    var lockDuration = TimeSpan.FromMinutes(15); // matches Lockout.DefaultLockoutTimeSpan
+                    var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "—";
+                    var ua = HttpContext.Request.Headers.UserAgent.ToString();
+                    await EmailService.SendAsync(
+                        user.Email!,
+                        "Cuenta bloqueada temporalmente — Gestor Financiero",
+                        EmailTemplates.AccountLocked(user.FullName, ip, ua, DateTime.UtcNow, lockDuration));
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to send account-locked alert to {Email}", user.Email);
+                    await AppEvents.LogExceptionAsync(ex, EventModules.AuthLogin, level: EventLevels.Warning,
+                        userId: user.Id, userEmail: user.Email);
+                }
+            }
+
+            RedirectManager.RedirectTo("Account/Lockout");
+            return;
+        }
+
+        errorMessage = GenericErrorMessage;
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "El correo es requerido.")]
+        [EmailAddress(ErrorMessage = "Correo no válido.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "La contraseña es requerida.")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        public bool RememberMe { get; set; }
+    }
+}

@@ -1,0 +1,36 @@
+@* Renders a flash-style status banner for auth forms. Reads from either the
+   parameter (`Message`) or the cookie left behind by IdentityRedirectManager. *@
+
+@if (!string.IsNullOrEmpty(DisplayMessage))
+{
+    var isError = DisplayMessage.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
+                || DisplayMessage.StartsWith("No pudimos", StringComparison.OrdinalIgnoreCase);
+
+    <MudAlert Severity="@(isError ? Severity.Error : Severity.Success)"
+              Variant="Variant.Filled"
+              Dense="true">
+        @DisplayMessage
+    </MudAlert>
+}
+
+@code {
+    private string? messageFromCookie;
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? DisplayMessage => Message ?? messageFromCookie;
+
+    protected override void OnInitialized()
+    {
+        messageFromCookie = HttpContext?.Request.Cookies[IdentityRedirectManager.StatusCookieName];
+
+        if (messageFromCookie is not null)
+        {
+            HttpContext?.Response.Cookies.Delete(IdentityRedirectManager.StatusCookieName);
+        }
+    }
+}

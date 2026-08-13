@@ -1,0 +1,362 @@
+@page "/categories"
+@attribute [Authorize]
+
+@using System.ComponentModel.DataAnnotations
+@using GestorFinanciero.Application.DTOs
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Enums
+
+@inject ICategoryService CategoryService
+@inject IAppEventLogger AppEvents
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Categorías — Gestor Financiero</PageTitle>
+
+<MudStack Spacing="6">
+    <div class="gf-page-header">
+        <div class="gf-page-title">
+            <MudText Typo="Typo.h4">Categorías</MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                Organizá tus ingresos, gastos, ahorros y deudas.
+            </MudText>
+        </div>
+        <div class="gf-page-actions">
+            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="StartCreate">
+                Nueva categoría
+            </MudButton>
+        </div>
+    </div>
+
+    @* ═══ Desktop: full table ═══ *@
+    <MudPaper Elevation="0" Class="gf-panel d-none d-sm-block">
+        <MudTable Items="categories"
+                  Loading="loading"
+                  LoadingProgressColor="Color.Primary"
+                  Hover="true"
+                  Dense="false"
+                  Class="gf-table">
+            <NoRecordsContent>
+                <MudText Class="pa-6 text-center mud-text-secondary">
+                    Aún no tenés categorías personalizadas.
+                </MudText>
+            </NoRecordsContent>
+            <HeaderContent>
+                <MudTh>Categoría</MudTh>
+                <MudTh>Tipo</MudTh>
+                <MudTh Style="width:120px" Class="text-right">Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <div class="cat-dot" style="@($"background:{context.Color}")"></div>
+                        <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Name</MudText>
+                        @if (context.IsSystem)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">
+                                Sistema
+                            </MudChip>
+                        }
+                    </MudStack>
+                </MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small"
+                             Variant="Variant.Outlined"
+                             Color="@ColorFor(context.Type)">
+                        @TypeLabel(context.Type)
+                    </MudChip>
+                </MudTd>
+                <MudTd Class="text-right">
+                    <MudTooltip Text="Editar">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Size="Size.Small"
+                                       OnClick="() => StartEdit(context)" />
+                    </MudTooltip>
+                    @if (!context.IsSystem)
+                    {
+                        <MudTooltip Text="Borrar">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="() => DeleteAsync(context)" />
+                        </MudTooltip>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+
+    @* ═══ Mobile: card list ═══ *@
+    <div class="d-sm-none">
+        @if (loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (categories.Count == 0)
+        {
+            <MudPaper Elevation="0" Class="gf-panel pa-6 text-center">
+                <MudText Class="mud-text-secondary">
+                    Aún no tenés categorías personalizadas.
+                </MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <div class="gf-card-list">
+                @foreach (var cat in categories)
+                {
+                    <div class="gf-mobile-card">
+                        <div class="gf-mobile-card-header">
+                            <div class="gf-mobile-card-title">
+                                <div class="cat-dot" style="@($"background:{cat.Color}")"></div>
+                                <span class="gf-mobile-card-title-text">@cat.Name</span>
+                            </div>
+                            <MudChip T="string" Size="Size.Small"
+                                     Variant="Variant.Outlined"
+                                     Color="@ColorFor(cat.Type)">
+                                @TypeLabel(cat.Type)
+                            </MudChip>
+                        </div>
+                        @if (cat.IsSystem)
+                        {
+                            <div class="gf-mobile-card-meta">
+                                <MudIcon Icon="@Icons.Material.Filled.Shield" Size="Size.Small" />
+                                Categoría del sistema
+                            </div>
+                        }
+                        <div class="gf-mobile-card-footer">
+                            <span class="mud-text-secondary" style="font-size:0.8125rem">
+                                @(cat.IsSystem ? "No se puede borrar" : "")
+                            </span>
+                            <div class="gf-mobile-card-actions">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Size="Size.Small"
+                                               OnClick="() => StartEdit(cat)" />
+                                @if (!cat.IsSystem)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   OnClick="() => DeleteAsync(cat)" />
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</MudStack>
+
+<MudDialog @bind-Visible="dialogOpen" Options="@_dialogOptions">
+    <TitleContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(editing?.Id is null ? Icons.Material.Filled.Add : Icons.Material.Filled.Edit)"
+                     Color="Color.Primary" />
+            <MudText Typo="Typo.h6">
+                @(editing?.Id is null ? "Nueva categoría" : "Editar categoría")
+            </MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (editing is not null)
+        {
+            <EditForm Model="editing" OnValidSubmit="SaveEdit" id="category-form">
+                <DataAnnotationsValidator />
+                <MudStack Spacing="4">
+                    <MudTextField T="string"
+                                  Label="Nombre"
+                                  @bind-Value="editing.Name"
+                                  For="() => editing.Name"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Label" />
+
+                    <MudSelect T="CategoryType"
+                               Label="Tipo"
+                               @bind-Value="editing.Type"
+                               Variant="Variant.Outlined"
+                               Adornment="Adornment.Start"
+                               AdornmentIcon="@Icons.Material.Filled.Segment">
+                        @foreach (var t in Enum.GetValues<CategoryType>())
+                        {
+                            <MudSelectItem Value="t">@TypeLabel(t)</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                        <MudTextField T="string"
+                                      Label="Color"
+                                      @bind-Value="editing.Color"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Formato hex (#7C3AED)"
+                                      Style="max-width:160px" />
+                        <div class="cat-preview" style="@($"background:{editing.Color}")"></div>
+                    </MudStack>
+                </MudStack>
+            </EditForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CancelEdit">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="SaveEdit"
+                   Disabled="@saving"
+                   StartIcon="@Icons.Material.Filled.Save">
+            @(saving ? "Guardando…" : "Guardar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<CategoryDto> categories = new();
+    private bool loading = true;
+
+    private bool dialogOpen;
+    private CategoryFormModel? editing;
+    private bool saving;
+
+    private readonly DialogOptions _dialogOptions = new()
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+    };
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        loading = true;
+        categories = (await CategoryService.GetAllAsync()).ToList();
+        loading = false;
+    }
+
+    private void StartCreate()
+    {
+        editing = new CategoryFormModel();
+        dialogOpen = true;
+    }
+
+    private void StartEdit(CategoryDto cat)
+    {
+        editing = new CategoryFormModel
+        {
+            Id = cat.Id,
+            Name = cat.Name,
+            Type = cat.Type,
+            Color = cat.Color,
+            Icon = cat.Icon,
+        };
+        dialogOpen = true;
+    }
+
+    private void CancelEdit()
+    {
+        dialogOpen = false;
+        editing = null;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (editing is null) return;
+
+        saving = true;
+        try
+        {
+            var dto = new CategoryUpsertDto
+            {
+                Id = editing.Id,
+                Name = editing.Name,
+                Type = editing.Type,
+                Color = editing.Color,
+                Icon = editing.Icon,
+            };
+
+            if (dto.Id is null)
+                await CategoryService.CreateAsync(dto);
+            else
+                await CategoryService.UpdateAsync(dto);
+
+            Snackbar.Add(dto.Id is null ? "Categoría creada." : "Categoría actualizada.", Severity.Success);
+            dialogOpen = false;
+            editing = null;
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Categories", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(CategoryDto cat)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Borrar categoría",
+            Message = $"¿Seguro que querés borrar \"{cat.Name}\"? No se puede recuperar.",
+            YesText = "Borrar",
+            CancelText = "Cancelar",
+        });
+
+        if (confirmed != true) return;
+
+        try
+        {
+            await CategoryService.DeleteAsync(cat.Id);
+            Snackbar.Add("Categoría borrada.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            await AppEvents.LogExceptionAsync(ex, module: "Api.Categories", level: "Error");
+            Snackbar.Add("No pudimos completar la operación. Intentá de nuevo en unos segundos.", Severity.Error);
+        }
+    }
+
+    private static string TypeLabel(CategoryType t) => t switch
+    {
+        CategoryType.Income          => "Ingreso",
+        CategoryType.Savings         => "Ahorro",
+        CategoryType.FixedExpense    => "Gasto fijo",
+        CategoryType.VariableExpense => "Gasto variable",
+        CategoryType.Debt            => "Deuda",
+        _                            => t.ToString(),
+    };
+
+    private static Color ColorFor(CategoryType t) => t switch
+    {
+        CategoryType.Income          => Color.Success,
+        CategoryType.Savings         => Color.Info,
+        CategoryType.FixedExpense    => Color.Error,
+        CategoryType.VariableExpense => Color.Warning,
+        CategoryType.Debt            => Color.Secondary,
+        _                            => Color.Default,
+    };
+
+    private sealed class CategoryFormModel
+    {
+        public Guid? Id { get; set; }
+
+        [Required(ErrorMessage = "El nombre es requerido.")]
+        [StringLength(80, MinimumLength = 2, ErrorMessage = "El nombre debe tener entre {2} y {1} caracteres.")]
+        public string Name { get; set; } = "";
+
+        public CategoryType Type { get; set; } = CategoryType.VariableExpense;
+
+        [Required, StringLength(9)]
+        public string Color { get; set; } = "#7C3AED";
+
+        [Required, StringLength(50)]
+        public string Icon { get; set; } = "circle";
+    }
+}

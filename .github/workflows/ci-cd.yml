@@ -1,0 +1,164 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Gestor Financiero — CI/CD
+#
+# Pull requests to main  → build + test only (no deploy).
+# Push to main            → build + test + push image + deploy Cloud Run.
+# Manual trigger          → same as push to main (via "Run workflow" button).
+#
+# Auth to GCP is via Workload Identity Federation — see docs/DEPLOYMENT.md
+# for the one-time GCP setup.
+# ═══════════════════════════════════════════════════════════════════════
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ═════════════════════════════════════════════════════════════════════
+  # Build + test — runs on every push/PR. Fast lane for feedback.
+  # ═════════════════════════════════════════════════════════════════════
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Cache NuGet packages between runs.
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/GestorFinanciero.slnx') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Deploy — only on push to main (or manual dispatch). Depends on
+  # build-test passing.
+  # ═════════════════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy to Cloud Run
+    needs: build-test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # WIF requires these permissions on the job.
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Auth to GCP via WIF (no service account JSON key) ───────────
+      - id: auth
+        name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      # ── Build + push using Buildx for cross-platform + BuildKit cache
+      - name: Setup buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REPO }}/app:${{ env.IMAGE_TAG }}
+            ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REPO }}/app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Deploy to Cloud Run ─────────────────────────────────────────
+      - name: Deploy revision
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ vars.CLOUD_RUN_SERVICE }}
+          region: ${{ vars.GCP_REGION }}
+          image: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REPO }}/app:${{ env.IMAGE_TAG }}
+          flags: |
+            --port=8080
+            --service-account=${{ vars.GCP_RUNTIME_SA }}
+            --allow-unauthenticated
+            --min-instances=0
+            --max-instances=3
+            --cpu=1
+            --memory=512Mi
+            --concurrency=80
+            --timeout=300
+            --set-env-vars=ASPNETCORE_ENVIRONMENT=Production
+            --set-secrets=ConnectionStrings__Default=neon-connection-string:latest,Smtp__Password=smtp-password:latest
+
+      - name: Show deploy URL
+        run: |
+          echo "### 🚀 Deployed to Cloud Run" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Revision:** \`${{ steps.deploy.outputs.name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+
+      # ── Smoke test the freshly-deployed revision ────────────────────
+      - name: Health check
+        run: |
+          URL="${{ steps.deploy.outputs.url }}/health"
+          echo "Probing $URL ..."
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Health check OK (attempt $i)"
+              exit 0
+            fi
+            echo "⏳ Attempt $i: got $STATUS, retrying in 3s..."
+            sleep 3
+          done
+          echo "❌ Health check failed after 10 attempts"
+          exit 1

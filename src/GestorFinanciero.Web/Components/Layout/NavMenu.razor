@@ -1,0 +1,41 @@
+@* Sidebar navigation — only rendered for authenticated users (see MainLayout).
+   No anon links since they're not needed here. *@
+
+<MudNavMenu Class="gf-navmenu pa-2">
+    <MudNavLink Href="/" Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Filled.Dashboard">
+        Panel
+    </MudNavLink>
+
+    <MudDivider Class="my-2" />
+
+    <MudText Typo="Typo.overline" Class="pl-4 mud-text-secondary">
+        Movimientos
+    </MudText>
+
+    <MudNavLink Href="transactions"
+                Icon="@Icons.Material.Filled.SwapVert">
+        Transacciones
+    </MudNavLink>
+
+    <MudNavLink Href="categories"
+                Icon="@Icons.Material.Filled.Category">
+        Categorías
+    </MudNavLink>
+
+    <MudDivider Class="my-2" />
+
+    <MudText Typo="Typo.overline" Class="pl-4 mud-text-secondary">
+        Planeación
+    </MudText>
+
+    <MudNavLink Href="budgets"
+                Icon="@Icons.Material.Filled.PieChart">
+        Presupuestos
+    </MudNavLink>
+
+    <MudNavLink Href="debts"
+                Icon="@Icons.Material.Filled.CreditCard">
+        Deudas
+    </MudNavLink>
+</MudNavMenu>

@@ -1,0 +1,71 @@
+@* Left-rail navigation shared by every /Account/Manage/* page.
+
+   Rendered two ways:
+   - On md+ screens: vertical sidebar (MudNavMenu).
+   - On <md screens: horizontal scrollable tab strip (custom flex row).
+
+   Both point at the same routes; we only swap the visual container
+   via Bootstrap-style d-none/d-md-block utility classes so no C# state
+   is required and the component stays static-SSR friendly. *@
+
+<div class="gf-manage-nav-tabs d-md-none">
+    <a href="Account/Manage" class="gf-tab @(IsActive("Account/Manage") ? "active" : "")">
+        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+        <span>Perfil</span>
+    </a>
+    <a href="Account/Manage/Email" class="gf-tab @(IsActive("Account/Manage/Email") ? "active" : "")">
+        <MudIcon Icon="@Icons.Material.Filled.Email" Size="Size.Small" />
+        <span>Correo</span>
+    </a>
+    <a href="Account/Manage/Password" class="gf-tab @(IsActive("Account/Manage/Password") ? "active" : "")">
+        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" />
+        <span>Contraseña</span>
+    </a>
+    <a href="Account/Manage/Sessions" class="gf-tab @(IsActive("Account/Manage/Sessions") ? "active" : "")">
+        <MudIcon Icon="@Icons.Material.Filled.Devices" Size="Size.Small" />
+        <span>Sesiones</span>
+    </a>
+    <a href="Account/Manage/Delete" class="gf-tab gf-tab-danger @(IsActive("Account/Manage/Delete") ? "active" : "")">
+        <MudIcon Icon="@Icons.Material.Filled.DeleteForever" Size="Size.Small" />
+        <span>Borrar</span>
+    </a>
+</div>
+
+<MudPaper Elevation="0" Class="gf-panel pa-2 d-none d-md-block">
+    <MudNavMenu Class="gf-navmenu">
+        <MudNavLink Href="Account/Manage"
+                    Match="NavLinkMatch.All"
+                    Icon="@Icons.Material.Filled.Person">
+            Perfil
+        </MudNavLink>
+        <MudNavLink Href="Account/Manage/Email"
+                    Icon="@Icons.Material.Filled.Email">
+            Correo
+        </MudNavLink>
+        <MudNavLink Href="Account/Manage/Password"
+                    Icon="@Icons.Material.Filled.Lock">
+            Contraseña
+        </MudNavLink>
+        <MudNavLink Href="Account/Manage/Sessions"
+                    Icon="@Icons.Material.Filled.Devices">
+            Sesiones
+        </MudNavLink>
+        <MudDivider Class="my-2" />
+        <MudNavLink Href="Account/Manage/Delete"
+                    Icon="@Icons.Material.Filled.DeleteForever"
+                    IconColor="Color.Error">
+            Borrar cuenta
+        </MudNavLink>
+    </MudNavMenu>
+</MudPaper>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private bool IsActive(string route)
+    {
+        var currentPath = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+        var target = "/" + route.TrimEnd('/').ToLowerInvariant();
+        return currentPath == target;
+    }
+}

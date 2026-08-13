@@ -1,0 +1,404 @@
+@page "/"
+
+@using System.Globalization
+@using GestorFinanciero.Application.DTOs
+@using GestorFinanciero.Application.Interfaces
+@using GestorFinanciero.Domain.Enums
+
+@inject IDashboardService Dashboard
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Gestor Financiero</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <MudStack Spacing="6">
+            <div>
+                <MudText Typo="Typo.h4">Hola, @context.User.Identity?.Name 👋</MudText>
+                <MudText Typo="Typo.body1" Class="mud-text-secondary mt-1">
+                    Este es tu panel del mes de @CurrentMonthName.
+                </MudText>
+            </div>
+
+            @if (_stats is null)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+            }
+            else
+            {
+                <!-- ── FILA 1 — Stat cards ── -->
+                <MudGrid>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Elevation="0" Class="gf-stat gf-stat-income">
+                            <MudText Typo="Typo.overline">Ingresos del mes</MudText>
+                            <MudText Typo="Typo.h4">@Format(_stats.IncomeThisMonth)</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@_stats.TransactionCount movimientos</MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Elevation="0" Class="gf-stat gf-stat-expense">
+                            <MudText Typo="Typo.overline">Gastos del mes</MudText>
+                            <MudText Typo="Typo.h4">@Format(_stats.ExpensesThisMonth)</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Fijos + variables + deuda</MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Elevation="0" Class="gf-stat gf-stat-balance">
+                            <MudText Typo="Typo.overline">Balance</MudText>
+                            <MudText Typo="Typo.h4"
+                                     Style="@($"color: var(--mud-palette-{(_stats.Balance >= 0 ? "success" : "error")})")">
+                                @Format(_stats.Balance)
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Ingresos − Gastos</MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Elevation="0" Class="gf-stat gf-stat-savings">
+                            <MudText Typo="Typo.overline">Ahorros del mes</MudText>
+                            <MudText Typo="Typo.h4">@Format(_stats.SavingsThisMonth)</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Categoría "Ahorro"</MudText>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+
+                @if (_stats.TransactionCount == 0)
+                {
+                    <MudPaper Elevation="0" Class="gf-cta pa-6">
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <div>
+                                <MudText Typo="Typo.h6">Primer paso</MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    Cargá tu primera transacción del mes para empezar a ver el panel con datos reales.
+                                </MudText>
+                            </div>
+                            <MudButton Href="transactions" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">
+                                Nueva transacción
+                            </MudButton>
+                        </MudStack>
+                    </MudPaper>
+                }
+                else
+                {
+                    <!-- ── FILA 2 — Últimos movimientos + Gastos por categoría ── -->
+                    <MudGrid>
+                        <MudItem xs="12" md="7">
+                            <MudPaper Elevation="0" Class="gf-panel pa-5" Style="height:100%">
+                                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+                                    <div>
+                                        <MudText Typo="Typo.h6">Últimos movimientos</MudText>
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Los 5 más recientes de tu cuenta.</MudText>
+                                    </div>
+                                    <MudButton Href="transactions" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">
+                                        Ver todos
+                                    </MudButton>
+                                </MudStack>
+
+                                @if (_stats.RecentTransactions.Count == 0)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-4 text-center">Sin movimientos aún.</MudText>
+                                }
+                                else
+                                {
+                                    @foreach (var tx in _stats.RecentTransactions)
+                                    {
+                                        <div class="gf-recent-row">
+                                            <div class="cat-dot" style="@($"background:{tx.CategoryColor}")"></div>
+                                            <div class="gf-recent-info">
+                                                <MudText Typo="Typo.body2" Class="font-weight-medium">@(tx.Description ?? tx.CategoryName)</MudText>
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                    @tx.CategoryName · @tx.Date.ToString("dd MMM", CultureInfo.GetCultureInfo("es-ES"))
+                                                </MudText>
+                                            </div>
+                                            <MudText Typo="Typo.body2" Class="font-weight-bold"
+                                                     Style="@($"color: var(--mud-palette-{(IsIncome(tx.CategoryType) ? "success" : "error")})")">
+                                                @(IsIncome(tx.CategoryType) ? "+" : "−")@tx.Amount.ToString("N2", CultureInfo.InvariantCulture) @tx.Currency
+                                            </MudText>
+                                        </div>
+                                    }
+                                }
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" md="5">
+                            <MudPaper Elevation="0" Class="gf-panel pa-5" Style="height:100%">
+                                <div class="mb-4">
+                                    <MudText Typo="Typo.h6">Gastos por categoría</MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Top 5 del mes.</MudText>
+                                </div>
+
+                                @if (_stats.ExpensesByCategory.Count == 0)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-4 text-center">Sin gastos registrados este mes.</MudText>
+                                }
+                                else
+                                {
+                                    <MudStack Spacing="4">
+                                        @foreach (var cat in _stats.ExpensesByCategory)
+                                        {
+                                            <div>
+                                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1">
+                                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                        <div class="cat-dot" style="@($"background:{cat.CategoryColor}")"></div>
+                                                        <MudText Typo="Typo.body2">@cat.CategoryName</MudText>
+                                                    </MudStack>
+                                                    <MudText Typo="Typo.body2" Class="font-weight-bold">@Format(cat.Amount)</MudText>
+                                                </MudStack>
+                                                <MudProgressLinear Value="@((double)cat.Percentage)" Color="Color.Primary" Rounded="true" Size="Size.Small"
+                                                                   Style="@($"--mud-palette-primary:{cat.CategoryColor}")" />
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1">@cat.Percentage.ToString("N1")% del total</MudText>
+                                            </div>
+                                        }
+                                    </MudStack>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    <!-- ── FILA 3 — Comparativa vs mes pasado + Distribución de gastos ── -->
+                    <MudGrid>
+                        <MudItem xs="12" md="7">
+                            <MudPaper Elevation="0" Class="gf-panel pa-5" Style="height:100%">
+                                <div class="mb-4">
+                                    <MudText Typo="Typo.h6">Comparativa con @_stats.PreviousMonthName</MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">¿Cómo venís vs el mes pasado?</MudText>
+                                </div>
+
+                                <MudGrid Spacing="3">
+                                    <MudItem xs="12" sm="4">
+                                        <div class="gf-delta">
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Ingresos</MudText>
+                                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                                <MudIcon Icon="@DeltaIcon(_stats.IncomeDelta)"
+                                                         Color="@DeltaColor(_stats.IncomeDelta, invert: false)"
+                                                         Size="Size.Small" />
+                                                <MudText Typo="Typo.h6" Style="@($"color: var(--mud-palette-{DeltaCssColor(_stats.IncomeDelta, invert: false)})")">
+                                                    @DeltaFormat(_stats.IncomeDelta)
+                                                </MudText>
+                                            </MudStack>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">vs mes pasado</MudText>
+                                        </div>
+                                    </MudItem>
+                                    <MudItem xs="12" sm="4">
+                                        <div class="gf-delta">
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Gastos</MudText>
+                                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                                <MudIcon Icon="@DeltaIcon(_stats.ExpensesDelta)"
+                                                         Color="@DeltaColor(_stats.ExpensesDelta, invert: true)"
+                                                         Size="Size.Small" />
+                                                <MudText Typo="Typo.h6" Style="@($"color: var(--mud-palette-{DeltaCssColor(_stats.ExpensesDelta, invert: true)})")">
+                                                    @DeltaFormat(_stats.ExpensesDelta)
+                                                </MudText>
+                                            </MudStack>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">vs mes pasado</MudText>
+                                        </div>
+                                    </MudItem>
+                                    <MudItem xs="12" sm="4">
+                                        <div class="gf-delta">
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Balance</MudText>
+                                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                                <MudIcon Icon="@DeltaIcon(_stats.BalanceDelta)"
+                                                         Color="@DeltaColor(_stats.BalanceDelta, invert: false)"
+                                                         Size="Size.Small" />
+                                                <MudText Typo="Typo.h6" Style="@($"color: var(--mud-palette-{DeltaCssColor(_stats.BalanceDelta, invert: false)})")">
+                                                    @DeltaFormat(_stats.BalanceDelta)
+                                                </MudText>
+                                            </MudStack>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">vs mes pasado</MudText>
+                                        </div>
+                                    </MudItem>
+                                </MudGrid>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" md="5">
+                            <MudPaper Elevation="0" Class="gf-panel pa-5" Style="height:100%">
+                                <div class="mb-4">
+                                    <MudText Typo="Typo.h6">Distribución de gastos</MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Composición del mes.</MudText>
+                                </div>
+
+                                @if (_stats.ExpensesThisMonth == 0)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-4 text-center">Sin gastos aún.</MudText>
+                                }
+                                else
+                                {
+                                    <div class="gf-distribution">
+                                        <div class="gf-bar">
+                                            <div class="gf-bar-fixed"    style="@($"width:{Pct(_stats.FixedExpenses)}%")"></div>
+                                            <div class="gf-bar-variable" style="@($"width:{Pct(_stats.VariableExpenses)}%")"></div>
+                                            <div class="gf-bar-debt"     style="@($"width:{Pct(_stats.DebtExpenses)}%")"></div>
+                                        </div>
+                                        <MudStack Spacing="2" Class="mt-4">
+                                            <MudStack Row Justify="Justify.SpaceBetween">
+                                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                    <span class="gf-legend-dot gf-bar-fixed"></span>
+                                                    <MudText Typo="Typo.body2">Fijos</MudText>
+                                                </MudStack>
+                                                <MudText Typo="Typo.body2" Class="font-weight-bold">@Format(_stats.FixedExpenses)</MudText>
+                                            </MudStack>
+                                            <MudStack Row Justify="Justify.SpaceBetween">
+                                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                    <span class="gf-legend-dot gf-bar-variable"></span>
+                                                    <MudText Typo="Typo.body2">Variables</MudText>
+                                                </MudStack>
+                                                <MudText Typo="Typo.body2" Class="font-weight-bold">@Format(_stats.VariableExpenses)</MudText>
+                                            </MudStack>
+                                            <MudStack Row Justify="Justify.SpaceBetween">
+                                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                    <span class="gf-legend-dot gf-bar-debt"></span>
+                                                    <MudText Typo="Typo.body2">Deudas</MudText>
+                                                </MudStack>
+                                                <MudText Typo="Typo.body2" Class="font-weight-bold">@Format(_stats.DebtExpenses)</MudText>
+                                            </MudStack>
+                                        </MudStack>
+                                    </div>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    <!-- ── FILA 4 — Salud financiera (3 mini widgets) ── -->
+                    <MudGrid>
+                        <MudItem xs="12" sm="4">
+                            <MudPaper Elevation="0" Class="gf-panel pa-5 text-center">
+                                <MudText Typo="Typo.overline" Class="mud-text-secondary">Tasa de ahorro</MudText>
+                                <div class="gf-ring my-2">
+                                    <MudProgressCircular Value="@((double)_stats.SavingsRatePercent)"
+                                                         Color="@(_stats.SavingsRatePercent >= 20 ? Color.Success : _stats.SavingsRatePercent >= 10 ? Color.Warning : Color.Error)"
+                                                         Size="Size.Large"
+                                                         Class="gf-ring-progress" />
+                                    <MudText Typo="Typo.h5" Class="gf-ring-label">@_stats.SavingsRatePercent.ToString("N0")%</MudText>
+                                </div>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@SavingsRateHint(_stats.SavingsRatePercent)</MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="4">
+                            <MudPaper Elevation="0" Class="gf-panel pa-5 text-center">
+                                <MudText Typo="Typo.overline" Class="mud-text-secondary">Gasto promedio diario</MudText>
+                                <MudText Typo="Typo.h4" Class="my-2">@Format(_stats.AvgDailySpend)</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Basado en @_stats.DaysElapsed días del mes</MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="4">
+                            <MudPaper Elevation="0" Class="gf-panel pa-5 text-center">
+                                <MudText Typo="Typo.overline" Class="mud-text-secondary">Progreso del mes</MudText>
+                                <MudText Typo="Typo.h4" Class="my-2">@_stats.DaysElapsed / @_stats.DaysInMonth</MudText>
+                                <MudProgressLinear Value="@(_stats.DaysInMonth == 0 ? 0 : (_stats.DaysElapsed * 100.0 / _stats.DaysInMonth))"
+                                                   Color="Color.Primary" Rounded="true" Size="Size.Small" Class="mt-3" />
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@(_stats.DaysInMonth - _stats.DaysElapsed) días para fin de mes</MudText>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                }
+            }
+        </MudStack>
+    </Authorized>
+
+    <NotAuthorized>
+        <MudStack AlignItems="AlignItems.Center" Class="gf-landing">
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Bolt" Class="mt-8">
+                Nueva versión 2.0
+            </MudChip>
+
+            <MudText Typo="Typo.h2" Align="Align.Center" Class="gf-hero-heading mt-4" Style="max-width:720px">
+                Tomá el control de tus <span class="gf-brand">finanzas</span>.
+            </MudText>
+
+            <MudText Typo="Typo.body1" Align="Align.Center" Class="mud-text-secondary mt-3" Style="max-width:600px">
+                Registrá ingresos, gastos, presupuestos y deudas en un solo lugar.
+                Sin planillas, sin fricción, con tus datos siempre a mano.
+            </MudText>
+
+            <MudGrid Class="mt-10" Spacing="4" Justify="Justify.Center" Style="max-width:1000px">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="0" Class="gf-feature">
+                        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Success" Size="Size.Large" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-2">Ingresos y gastos</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Registrá cada movimiento con su categoría y fecha.</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="0" Class="gf-feature">
+                        <MudIcon Icon="@Icons.Material.Filled.PieChart" Color="Color.Primary" Size="Size.Large" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-2">Presupuestos</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Planificá cada mes y compará estimado vs. real.</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="0" Class="gf-feature">
+                        <MudIcon Icon="@Icons.Material.Filled.CreditCard" Color="Color.Warning" Size="Size.Large" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-2">Deudas</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Amortización clara: capital, interés y saldo restante.</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="0" Class="gf-feature">
+                        <MudIcon Icon="@Icons.Material.Filled.Insights" Color="Color.Secondary" Size="Size.Large" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-2">Reportes</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Gráficos y resúmenes anuales con un click.</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private DashboardStatsDto? _stats;
+
+    private static string CurrentMonthName =>
+        CultureInfo.GetCultureInfo("es-ES").DateTimeFormat.GetMonthName(DateTime.UtcNow.Month);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+            _stats = await Dashboard.GetCurrentMonthStatsAsync();
+    }
+
+    private string Format(decimal amount) => $"{(_stats?.Currency ?? "USD")} {amount.ToString("N2", CultureInfo.InvariantCulture)}";
+
+    private static bool IsIncome(CategoryType t) => t is CategoryType.Income or CategoryType.Savings;
+
+    private decimal Pct(decimal amount) => _stats!.ExpensesThisMonth > 0
+        ? Math.Round(amount / _stats.ExpensesThisMonth * 100m, 1)
+        : 0m;
+
+    private string DeltaFormat(decimal delta)
+    {
+        var sign = delta >= 0 ? "+" : "−";
+        return $"{sign}{Math.Abs(delta).ToString("N2", CultureInfo.InvariantCulture)}";
+    }
+
+    private static string DeltaIcon(decimal delta)
+        => delta > 0 ? Icons.Material.Filled.ArrowUpward
+         : delta < 0 ? Icons.Material.Filled.ArrowDownward
+         : Icons.Material.Filled.Remove;
+
+    // invert=true → subir es MALO (usado para gastos)
+    private static Color DeltaColor(decimal delta, bool invert)
+    {
+        if (delta == 0) return Color.Default;
+        var positive = delta > 0;
+        return (positive ^ invert) ? Color.Success : Color.Error;
+    }
+
+    private static string DeltaCssColor(decimal delta, bool invert)
+    {
+        if (delta == 0) return "text-secondary";
+        var positive = delta > 0;
+        return (positive ^ invert) ? "success" : "error";
+    }
+
+    private static string SavingsRateHint(decimal rate) => rate switch
+    {
+        >= 30 => "Excelente disciplina",
+        >= 20 => "Muy bueno",
+        >= 10 => "Vas bien, podés mejorar",
+        > 0   => "Justo, cuidá los gastos",
+        _     => "Gastando más de lo que entra"
+    };
+}
