@@ -153,7 +153,7 @@ builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>
     // known-networks/proxies lists is the platform-agnostic way to accept
     // forwarded headers from any hop. The alternative would be maintaining
     // Google's IP allowlist here.
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
